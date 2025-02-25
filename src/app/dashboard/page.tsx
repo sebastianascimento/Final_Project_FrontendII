@@ -34,10 +34,10 @@ const DashboardPage = async () => {
 
         {/* USER CARDS - Ocupando 100% da largura */}
         <div className="w-full flex gap-4 flex-wrap justify-start mb-4">
-          <UserCard type="Sales" />
-          <UserCard type="Revenue" />
-          <UserCard type="Product Sold" />
-          <UserCard type="New Customers" />
+          <UserCard type="Sales" icon="/icons/sales.png"/>
+          <UserCard type="Revenue" icon="/icons/revenue.png" />
+          <UserCard type="Product Sold" icon="/icons/stock.png" />
+          <UserCard type="New Customers" icon="/icons/new.png"/>
         </div>
 
         {/* ATTENDANCE E BEST SELLER PRODUCTS - Lado a lado, 50% cada */}

@@ -6,7 +6,7 @@ const menuItems = [
     title: "MENU",
     items: [
       {
-        icon: "icons/home.svg",
+        icon: "/icons/home.png",
         label: "Home",
         href: "/dashboard",
         visible: ["admin", "teacher", "student", "parent"],
