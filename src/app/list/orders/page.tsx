@@ -23,26 +23,26 @@ type Student = {
 
 const columns = [
   {
-    header: "Info",
+    header: "Orders",
     accessor: "info",
   },
   {
-    header: "Student ID",
+    header: "Orders ID",
     accessor: "studentId",
     className: "hidden md:table-cell",
   },
   {
-    header: "Grade",
+    header: "Product",
     accessor: "grade",
     className: "hidden md:table-cell",
   },
   {
-    header: "Phone",
+    header: "Amount",
     accessor: "phone",
     className: "hidden lg:table-cell",
   },
   {
-    header: "Address",
+    header: "Client",
     accessor: "address",
     className: "hidden md:table-cell",
   },

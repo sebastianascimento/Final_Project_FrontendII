@@ -36,9 +36,9 @@ const menuItems = [
         visible: ["admin"],
       },
       {
-        icon: "/icons/payments.png",
-        label: "Payments",
-        href: "/list/payments",
+        icon: "/icons/movestock.png",
+        label: "Stocks",
+        href: "/list/stocks",
         visible: ["admin", "teacher"],
       },
       {

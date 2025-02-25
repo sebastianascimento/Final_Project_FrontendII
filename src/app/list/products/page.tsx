@@ -6,8 +6,8 @@ import Navbar from "../../components/dashboard/Navbar";
 import TableSearch from "../../components/products/TableSearch";
 import Pagination from "@/app/components/products/Pagination";
 import Table from "../../components/products/Table";
-import Image from "next/image"; // Certifique-se de importar o Image
-import { teachersData } from "@/app/lib/data";
+import Image from "next/image"; 
+import { productsData } from "@/app/lib/data";
 
 type Teacher = {
   id: number;
@@ -23,31 +23,31 @@ type Teacher = {
 
 const columns = [
   {
-    header: "Info",
+    header: "Products",
     accessor: "info",
   },
   {
-    header: "Teacher ID",
+    header: "Products ID",
     accessor: "teacherId",
     className: "hidden md:table-cell",
   },
   {
-    header: "Subjects",
+    header: "Categories",
     accessor: "subjects",
     className: "hidden md:table-cell",
   },
   {
-    header: "Classes",
+    header: "Brands",
     accessor: "classes",
     className: "hidden md:table-cell",
   },
   {
-    header: "Phone",
+    header: "Reviews",
     accessor: "phone",
     className: "hidden lg:table-cell",
   },
   {
-    header: "Address",
+    header: "Year",
     accessor: "address",
     className: "hidden md:table-cell",
   },
@@ -138,7 +138,7 @@ const ProductsPage = async () => {
           </div>
           
           {/* LIST - Tabela de produtos */}
-          <Table columns={columns} renderRow={renderRow} data={teachersData} />
+          <Table columns={columns} renderRow={renderRow} data={productsData} />
           {/* Pagination */}
           <Pagination />
         </div>
