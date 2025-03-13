@@ -6,24 +6,43 @@ import Navbar from "../../components/dashboard/Navbar";
 import TableSearch from "../../components/products/TableSearch";
 import Pagination from "@/app/components/products/Pagination";
 import Table from "../../components/products/Table";
-import Image from "next/image"; 
-import { subjectsData } from "@/app/lib/data";
+import Image from "next/image";
+import { Prisma } from "@prisma/client";
+import { ITEM_PER_PAGE } from "@/app/lib/setting";
+import FormModal from "@/app/components/FormModal";
+import { prisma } from "@/app/lib/prisma";
 
-type Logistics = {
-  id: number;
-  name: string;
-  teachers: string[];
-};
+type ShippingWithRelations = Prisma.ShippingGetPayload<{
+  include: {
+    stock: {
+      include: {
+        product: true;
+      };
+    };
+  };
+}>;
 
 const columns = [
   {
-    header: "Subject Name",
-    accessor: "name",
+    header: "Product",
+    accessor: "product",
   },
   {
-    header: "Teachers",
-    accessor: "teachers",
+    header: "Status",
+    accessor: "status",
+  },
+  {
+    header: "Carrier",
+    accessor: "carrier",
     className: "hidden md:table-cell",
+  },
+  {
+    header: "Est. Delivery",
+    accessor: "estimatedDelivery",
+  },
+  {
+    header: "Stock Level",
+    accessor: "stockLevel",
   },
   {
     header: "Actions",
@@ -31,41 +50,92 @@ const columns = [
   },
 ];
 
-const renderRow = (item: Logistics) => {
+// Função renderRow atualizada com o estilo visual do status igual ao de orders
+const renderRow = (item: ShippingWithRelations) => {
   return (
-    <tr key={item.id} className="border-b border-gray-200 even:bg-gray-50 text-sm hover:bg-lamaPurpleLight">
-      <td className="flex items-center gap-4 p-4">
-        <div className="flex flex-col">
-          <h3 className="font-semibold">{item.name}</h3>
-          <p className="text-xs text-gray-500">{item.teachers.join(",")}</p>
-        </div>
+    <tr
+      key={item.id}
+      className="border-b border-gray-200 even:bg-gray-50 text-sm hover:bg-lamaPurpleLight"
+    >
+      <td className="p-4">{item.stock.product.name}</td>
+      <td className="p-4">
+        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+          ${item.status === 'DELIVERED' ? 'bg-green-100 text-green-800' : 
+          item.status === 'SHIPPED' ? 'bg-blue-100 text-blue-800' :
+          item.status === 'PROCESSING' ? 'bg-purple-100 text-purple-800' :
+          item.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+          'bg-yellow-100 text-yellow-800'}`}>
+          {item.status}
+        </span>
       </td>
-      <td>
+      <td className="p-4 hidden md:table-cell">{item.carrier}</td>
+      <td className="p-4">
+        {new Date(item.estimatedDelivery).toLocaleDateString()}
+      </td>
+      <td className="p-4">{item.stock.stockLevel}</td>
+      <td className="p-4">
         <div className="flex items-center gap-2">
-          <Link href={`/list/products/${item.id}`}>
-            <button className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaSky">
-              <Image src="/view.png" alt="" width={16} height={16} />
-            </button>
-          </Link>
-          <button className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaSky">
-            <Image src="/delete.png" alt="" width={16} height={16} />
-          </button>
+          <FormModal table="shipping" type="update" data={item} />
+          <FormModal table="shipping" type="delete" id={item.id} />
         </div>
       </td>
     </tr>
   );
 };
 
-const LogisticsPage = async () => {
+const LogisticsPage = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    page?: string;
+    search?: string;
+  }>;
+}) => {
+  const params = await searchParams;
+
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user) {
     return <p className="text-red-500">Acesso negado! Faça login primeiro.</p>;
   }
 
+  const page = Number(params.page) || 1;
+  const currentPage = Math.max(1, page);
+  const searchTerm = params.search;
+
+  const where: Prisma.ShippingWhereInput = {};
+
+  if (searchTerm) {
+    where.OR = [
+      { status: { contains: searchTerm, mode: "insensitive" } },
+      { carrier: { contains: searchTerm, mode: "insensitive" } },
+    ];
+  }
+
+  const take = ITEM_PER_PAGE;
+  const skip = ITEM_PER_PAGE * (currentPage - 1);
+
+  const data = await prisma.shipping.findMany({
+    where,
+    include: {
+      stock: {
+        include: {
+          product: true,
+        },
+      },
+    },
+    take,
+    skip,
+    orderBy: {
+      estimatedDelivery: "asc",
+    },
+  });
+
+  const count = await prisma.shipping.count({ where });
+
   return (
     <div className="h-screen flex">
-      {/* LEFT - Sidebar (mesma do Dashboard) */}
+      {/* LEFT - Sidebar */}
       <div className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4">
         <Link
           href="/"
@@ -80,28 +150,21 @@ const LogisticsPage = async () => {
       <div className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4">
         <Navbar />
 
-        {/* Conteúdo específico da página de Products */}
         <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-          {/* TOP */}
           <div className="flex items-center justify-between">
-            <h1 className="hidden md:block text-lg font-semibold">All Logistics</h1>
+            <h1 className="hidden md:block text-lg font-semibold">
+              Shipping Management
+            </h1>
             <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
               <TableSearch />
               <div className="flex items-center gap-4 self-end">
-                <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
-                  {/* Ícone ou conteúdo do botão */}
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
-                  {/* Ícone ou conteúdo do botão */}
-                </button>
+                <FormModal table="shipping" type="create" />
               </div>
             </div>
           </div>
-          
-          {/* LIST - Tabela de produtos */}
-          <Table columns={columns} renderRow={renderRow} data={subjectsData} />
-          {/* Pagination */}
-          <Pagination />
+
+          <Table columns={columns} renderRow={renderRow} data={data} />
+          <Pagination page={currentPage} count={count} />
         </div>
       </div>
     </div>

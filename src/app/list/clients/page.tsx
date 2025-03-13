@@ -5,42 +5,35 @@ import Menu from "../../components/dashboard/Menu";
 import Navbar from "../../components/dashboard/Navbar";
 import TableSearch from "../../components/products/TableSearch";
 import Pagination from "@/app/components/products/Pagination";
-import Table from "../../components/products/Table";
-import Image from "next/image"; 
-import { parentsData } from "@/app/lib/data";
+import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@prisma/client";
+import { ITEM_PER_PAGE } from "@/app/lib/setting";
+import FormModal from "../../components/FormModal";
+import CustomerRow from "@/app/components/customers/CustomerRow";
 
-type Parent = {
-  id: number;
-  name: string;
-  email?: string;
-  students: string[];
-  phone: string;
-  address: string;
-};
-
+// Colunas para a tabela de clientes
 const columns = [
   {
-    header: "Info",
-    accessor: "info",
+    header: "ID",
+    accessor: "id",
   },
   {
-    header: "Student Names",
-    accessor: "studentId",
+    header: "Customer",
+    accessor: "customerInfo",
+  },
+  {
+    header: "Email",
+    accessor: "email",
     className: "hidden md:table-cell",
-  },
-  {
-    header: "Grade",
-    accessor: "grade",
-    className: "hidden md:table-cell",
-  },
-  {
-    header: "Phone",
-    accessor: "phone",
-    className: "hidden lg:table-cell",
   },
   {
     header: "Address",
     accessor: "address",
+    className: "hidden md:table-cell",
+  },
+  {
+    header: "Orders",
+    accessor: "orderCount",
     className: "hidden md:table-cell",
   },
   {
@@ -49,46 +42,63 @@ const columns = [
   },
 ];
 
-const renderRow = (item: Parent) => {
-  return (
-    <tr key={item.id} className="border-b border-gray-200 even:bg-gray-50 text-sm hover:bg-lamaPurpleLight">
-      <td className="flex items-center gap-4 p-4">
-        <div className="flex flex-col">
-          <h3 className="font-semibold">{item.name}</h3>
-          <p className="text-xs text-gray-500">{item?.email}</p>
-        </div>
-      </td>
-      <td className="hidden md:table-cell">
-            {item.students?.join(", ")}
-      </td>
-      <td className="hidden md:table-cell">{item.phone}</td>
-      <td className="hidden md:table-cell">{item.address}</td>
-      <td>
-        <div className="flex items-center gap-2">
-          <Link href={`/list/products/${item.id}`}>
-            <button className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaSky">
-              <Image src="/view.png" alt="" width={16} height={16} />
-            </button>
-          </Link>
-          <button className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaSky">
-            <Image src="/delete.png" alt="" width={16} height={16} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-};
-
-const ClientsPage = async () => {
+const CustomersPage = async ({
+  searchParams
+}: {
+  searchParams: { 
+    page?: string;
+    search?: string;
+  }
+}) => {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user) {
     return <p className="text-red-500">Acesso negado! Faça login primeiro.</p>;
   }
 
+  const page = Number(searchParams.page) || 1;
+  const currentPage = Math.max(1, page);
+  const searchTerm = searchParams.search;
+  const currentDate = "2025-03-11 10:47:09"; // Data atualizada
+  const currentUser = "sebastianascimento"; // Login atualizado
+
+  // Adicione condições de busca se houver um termo de pesquisa
+  let where: Prisma.CustomerWhereInput = {};
+  if (searchTerm) {
+    where = {
+      OR: [
+        { name: { contains: searchTerm, mode: 'insensitive' as Prisma.QueryMode } },
+        { email: { contains: searchTerm, mode: 'insensitive' as Prisma.QueryMode } },
+        { address: { contains: searchTerm, mode: 'insensitive' as Prisma.QueryMode } },
+      ]
+    };
+  }
+
+  const take = ITEM_PER_PAGE;
+  const skip = ITEM_PER_PAGE * (currentPage - 1);
+
+  // Buscar clientes com contagem de pedidos
+  const data = await prisma.customer.findMany({
+    where,
+    include: {
+      _count: {
+        select: {
+          orders: true
+        }
+      }
+    },
+    orderBy: {
+      id: 'desc'
+    },
+    take,
+    skip,
+  });
+
+  const count = await prisma.customer.count({ where });
+
   return (
     <div className="h-screen flex">
-      {/* LEFT - Sidebar (mesma do Dashboard) */}
+      {/* LEFT - Sidebar */}
       <div className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4">
         <Link
           href="/"
@@ -103,32 +113,52 @@ const ClientsPage = async () => {
       <div className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4">
         <Navbar />
 
-        {/* Conteúdo específico da página de Products */}
         <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-          {/* TOP */}
           <div className="flex items-center justify-between">
-            <h1 className="hidden md:block text-lg font-semibold">All Clients</h1>
+            <h1 className="hidden md:block text-lg font-semibold">All Customers</h1>
             <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
               <TableSearch />
               <div className="flex items-center gap-4 self-end">
-                <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
-                  {/* Ícone ou conteúdo do botão */}
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
-                  {/* Ícone ou conteúdo do botão */}
-                </button>
+                <FormModal table="customer" type="create" />
               </div>
             </div>
           </div>
+
+          {/* Renderizando a tabela diretamente com linhas cliente */}
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full bg-white">
+              <thead className="bg-gray-100">
+                <tr>
+                  {columns.map((column, index) => (
+                    <th 
+                      key={index} 
+                      className={`py-2 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider ${column.className || ''}`}
+                    >
+                      {column.header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item) => (
+                  <CustomerRow key={item.id} item={item} />
+                ))}
+                {data.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length} className="text-center py-4 text-gray-500">
+                      No customers found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           
-          {/* LIST - Tabela de produtos */}
-          <Table columns={columns} renderRow={renderRow} data={parentsData} />
-          {/* Pagination */}
-          <Pagination />
+          <Pagination page={currentPage} count={count} />
         </div>
       </div>
     </div>
   );
 };
 
-export default ClientsPage;
+export default CustomersPage;

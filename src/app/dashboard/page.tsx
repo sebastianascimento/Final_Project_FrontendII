@@ -4,9 +4,10 @@ import Link from "next/link";
 import Menu from "../components/dashboard/Menu";
 import Navbar from "../components/dashboard/Navbar";
 import UserCard from "../components/dashboard/UserCard";
-import AttendanceChart from "../components/dashboard/AttendanceChart";
+import OrderChart from "../components/dashboard/OrderChart";
 import FinanceChart from "../components/dashboard/FinanceChart";
-import SalesByCountries from "../components/dashboard/SalesByCountries";
+import OrderChartContainer from "../components/dashboard/OrderChartContainer";
+import SalesByBrands from "../components/dashboard/SalesByBrands";
 
 const DashboardPage = async () => {
   const session = await getServerSession(authOptions);
@@ -34,22 +35,21 @@ const DashboardPage = async () => {
 
         {/* USER CARDS - Ocupando 100% da largura */}
         <div className="w-full flex gap-4 flex-wrap justify-start mb-4">
-          <UserCard type="Sales" icon="/icons/sales.png"/>
-          <UserCard type="Revenue" icon="/icons/revenue.png" />
-          <UserCard type="Product Sold" icon="/icons/stock.png" />
-          <UserCard type="New Customers" icon="/icons/new.png"/>
+          <UserCard type="products" />
+          <UserCard type="orders" />
+          <UserCard type="customers" />
         </div>
 
         {/* ATTENDANCE E BEST SELLER PRODUCTS - Lado a lado, 50% cada */}
         <div className="flex flex-wrap gap-4 mt-4 w-full justify-start">
           <div className="w-1/2 h-[500px] w-[2000px]">
-            <AttendanceChart />
+            <OrderChartContainer />
           </div>
         </div>
 
         {/* SALES BY COUNTRIES - 100% da largura */}
         <div className="w-full h-[450px] mt-4">
-          <SalesByCountries />
+          <SalesByBrands />
         </div>
 
         {/* FINANCE CHART - Ocupa 100% da largura */}

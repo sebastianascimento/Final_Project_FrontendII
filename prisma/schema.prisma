@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  price       Float
+  category    Category?  @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
+  categoryId  Int?
+  brand       Brand?     @relation(fields: [brandId], references: [id], map: "Product_brandId_fkey")
+  brandId     Int?
+  reviews     Review[]
+  stock       Stock[]
+  orders      Order[]
+  shippings   Shipping[]
+  supplier    Supplier?  @relation(fields: [supplierId], references: [id], map: "Product_supplierId_fkey")
+  supplierId  Int?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  products    Product[]
+}
+
+model Brand {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  logo        String?
+  description String?
+  products    Product[]
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  comment   String?
+  product   Product  @relation(fields: [productId], references: [id])
+  productId Int
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  product    Product     @relation(fields: [productId], references: [id])
+  productId  Int
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  customerId Int
+  address    String
+  date       DateTime    @default(now())
+  quantity   Int
+  status     OrderStatus
+}
+
+model Customer {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  email   String  @unique
+  address String
+  picture String? 
+  orders  Order[]
+}
+
+model Employee {
+  id        Int        @id @default(autoincrement())
+  name      String
+  shippings Shipping[] @relation("ShippingEmployees")
+}
+
+model Shipping {
+  id                Int        @id @default(autoincrement())
+  name              String
+  status            String
+  carrier           String
+  estimatedDelivery DateTime
+  stock             Stock      @relation(fields: [stockId], references: [id])
+  stockId           Int
+  product           Product    @relation(fields: [productId], references: [id])
+  productId         Int
+  employees         Employee[] @relation("ShippingEmployees") // Relação corrigida
+}
+
+model Stock {
+  id              Int              @id @default(autoincrement())
+  product         Product          @relation(fields: [productId], references: [id])
+  productId       Int
+  stockLevel      Int
+  supplier        Supplier         @relation(fields: [supplierId], references: [id])
+  supplierId      Int
+  supplierReviews SupplierReview[]
+  shippings       Shipping[]
+}
+
+model Supplier {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  contactInfo String
+  products    Product[] // Removendo campo de relação oposto
+  stock       Stock[]
+  reviews     SupplierReview[]
+}
+
+model SupplierReview {
+  id         Int      @id @default(autoincrement())
+  rating     Int
+  comment    String?
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  supplierId Int
+  createdAt  DateTime @default(now())
+  stock      Stock?   @relation(fields: [stockId], references: [id])
+  stockId    Int?
+}
+
+enum OrderStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}

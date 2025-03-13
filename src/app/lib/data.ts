@@ -393,3 +393,17 @@ export const productsData = [
     },
   ];
   
+
+  export const calendarEvents = [
+    {
+      title: "Reunião de Equipa",
+      start: new Date(2025, 1, 25, 10, 0), 
+      end: new Date(2025, 1, 25, 11, 0),   
+    },
+    {
+      title: "Apresentação do Projeto",
+      start: new Date(2025, 1, 26, 14, 0),
+      end: new Date(2025, 1, 26, 16, 0),
+    },
+  ];
+  
