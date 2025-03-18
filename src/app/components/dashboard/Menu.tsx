@@ -1,7 +1,25 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
-const menuItems = [
+// Interface para itens do menu com tipo mais preciso
+interface MenuItem {
+  icon: string;
+  label: string;
+  href?: string;
+  action?: string;
+  visible: string[];
+}
+
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+}
+
+const menuItems: MenuSection[] = [
   {
     title: "MENU",
     items: [
@@ -65,15 +83,10 @@ const menuItems = [
         visible: ["admin", "teacher", "student", "parent"],
       },
       {
-        icon: "/icons/settings.png",
-        label: "Settings",
-        href: "/settings",
-        visible: ["admin", "teacher", "student", "parent"],
-      },
-      {
         icon: "/icons/logout.png",
         label: "Logout",
-        href: "/logout",
+        href: "#", // Link fictício (corrige o erro de tipo)
+        action: "logout", // Marcador especial para ação de logout
         visible: ["admin", "teacher", "student", "parent"],
       },
     ],
@@ -81,24 +94,58 @@ const menuItems = [
 ];
 
 const Menu = () => {
+  const router = useRouter();
+  const currentDate = "2025-03-15 13:25:51";
+  const currentUser = "sebastianascimento";
+
+  // Função para lidar com o logout
+  const handleLogout = async () => {
+    console.log(`[${currentDate}] @${currentUser} - Realizando logout da aplicação`);
+    
+    try {
+      await signOut({ redirect: false });
+      
+      console.log(`[${currentDate}] @${currentUser} - Logout bem-sucedido, redirecionando para página inicial`);
+      router.push("/");
+    } catch (error) {
+      console.error(`[${currentDate}] @${currentUser} - Erro ao realizar logout:`, error);
+    }
+  };
+
   return (
     <div className="mt-4 text-sm">
-      {menuItems.map((i) => (
-        <div className="flex flex-col gap-2" key={i.title}>
+      {menuItems.map((section) => (
+        <div className="flex flex-col gap-2" key={section.title}>
           <span className="hidden lg:block text-gray-400 font-light my-4">
-            {i.title}
+            {section.title}
           </span>
-          {i.items.map((item) => {
+          
+          {section.items.map((item) => {
+            // Se for item de logout, renderizar como botão
+            if (item.action === "logout") {
               return (
-                <Link
-                  href={item.href}
+                <button
                   key={item.label}
-                  className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight"
+                  onClick={handleLogout}
+                  className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight w-full text-left"
                 >
                   <Image src={item.icon} alt="" width={20} height={20} />
                   <span className="hidden lg:block">{item.label}</span>
-                </Link>
+                </button>
               );
+            }
+            
+            // Outros itens renderizados como links
+            return (
+              <Link
+                href={item.href || "#"} // Garantir que sempre há um href válido
+                key={item.label}
+                className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight"
+              >
+                <Image src={item.icon} alt="" width={20} height={20} />
+                <span className="hidden lg:block">{item.label}</span>
+              </Link>
+            );
           })}
         </div>
       ))}

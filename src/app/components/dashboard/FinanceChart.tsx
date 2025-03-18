@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import {
   LineChart,
   Line,
@@ -12,8 +13,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { Building, RefreshCw } from "lucide-react";
 
-// Interface para tipagem dos dados da ordem
 interface Order {
   id: number;
   date: string;
@@ -21,7 +22,6 @@ interface Order {
   status: string | null;
 }
 
-// Interface para tipagem dos dados mensais formatados
 interface MonthData {
   name: string;
   income: number;
@@ -29,8 +29,10 @@ interface MonthData {
 }
 
 const FinanceChart = () => {
-  const currentDate = "2025-03-13 10:31:57";
-  const currentUser = "sebastianascimento";
+
+  const { data: session, status } = useSession();
+  const companyId = session?.user?.companyId;
+  const companyName = session?.user?.companyName;
 
   const [chartData, setChartData] = useState<MonthData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -38,57 +40,61 @@ const FinanceChart = () => {
   const [totalSpent, setTotalSpent] = useState<number>(0);
   const [dataFound, setDataFound] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchOrderData = async () => {
-      try {
-        setIsLoading(true);
-        console.log(`Fetching order finance data at ${currentDate} by ${currentUser}`);
-        
-        // Buscar dados das ordens da API específica para finanças
-        const response = await fetch('/api/orders/finance');
-        
-        if (!response.ok) {
-          throw new Error(`Error fetching order data: ${response.status}`);
-        }
-        
-        const orders: Order[] = await response.json();
-        
-        if (orders && orders.length > 0) {
-          // Processar os dados por mês
-          const monthlyData = processOrdersByMonth(orders);
-          
-          // Calcular o total gasto
-          const total = orders.reduce((sum, order) => sum + order.total, 0);
-          
-          setChartData(monthlyData);
-          setTotalSpent(total);
-          setDataFound(true);
-          
-          console.log(`Using order data: ${orders.length} orders found`);
-        } else {
-          // Se não há dados, não usar dados padrão, apenas mostrar a mensagem
-          console.log("No order data found");
-          setChartData([]);
-          setTotalSpent(0);
-          setDataFound(false);
-        }
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching order data:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        setDataFound(false);
-      } finally {
+  const fetchFinanceData = async () => {
+    try {
+      setIsLoading(true);
+
+      if (status !== "loading" && !companyId) {
+        setError("company_not_configured");
         setIsLoading(false);
+        return;
       }
-    };
-    
-    fetchOrderData();
-  }, [currentDate, currentUser]);
+
+      if (status === "loading") {
+        return;
+      }
+      
+      const response = await fetch(`/api/orders/finance?companyId=${companyId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching order data: ${response.status}`);
+      }
+      
+      const orders: Order[] = await response.json();
+      
+      if (orders && orders.length > 0) {
+        // Processar os dados por mês
+        const monthlyData = processOrdersByMonth(orders);
+        
+        // Calcular o total gasto
+        const total = orders.reduce((sum, order) => sum + order.total, 0);
+        
+        setChartData(monthlyData);
+        setTotalSpent(total);
+        setDataFound(true);
+        
+      } else {
+        setChartData([]);
+        setTotalSpent(0);
+        setDataFound(false);
+      }
+      
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      setDataFound(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
-  // Função para processar ordens por mês
+  useEffect(() => {
+    if (status !== 'loading') {
+      fetchFinanceData();
+    }
+  }, [companyId, status]);
+  
   const processOrdersByMonth = (orders: Order[]): MonthData[] => {
-    // Objeto para armazenar os totais por mês
     const monthlyTotals: Record<string, {income: number, expense: number}> = {
       'Jan': {income: 0, expense: 0},
       'Feb': {income: 0, expense: 0},
@@ -104,22 +110,19 @@ const FinanceChart = () => {
       'Dec': {income: 0, expense: 0},
     };
     
-    // Processar cada ordem e adicionar ao mês correspondente
     orders.forEach(order => {
       try {
         const date = new Date(order.date);
-        if (!isNaN(date.getTime())) { // Verificar se a data é válida
+        if (!isNaN(date.getTime())) { 
           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           const monthName = monthNames[date.getMonth()];
           
-          // Para este exemplo, consideramos todas as ordens como despesas
           monthlyTotals[monthName].expense += order.total;
           
           // Para dados de receita (simulação - não temos dados reais de receita)
           monthlyTotals[monthName].income += order.total * 1.2;
         }
       } catch (e) {
-        console.error('Error processing order:', e);
       }
     });
     
@@ -141,6 +144,18 @@ const FinanceChart = () => {
     }).format(value);
   };
   
+  // MULTI-TENANT: Tratar carregamento da sessão
+  if (status === 'loading') {
+    return (
+      <div className="bg-white rounded-xl w-full h-full p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-t-2 border-blue-500 border-solid rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500">Carregando informações de usuário...</p>
+        </div>
+      </div>
+    );
+  }
+  
   // Mostrar loader enquanto os dados estão sendo carregados
   if (isLoading) {
     return (
@@ -158,23 +173,43 @@ const FinanceChart = () => {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4">
         <div className="flex justify-between items-center mb-2">
-          <h1 className="text-lg font-semibold">Finance</h1>
-          <Image src="/icons/investment.png" alt="Finance icon" width={20} height={20} />
+          <h1 className="text-lg font-semibold flex items-center">
+            Finance
+            {/* MULTI-TENANT: Mostrar nome da empresa quando disponível */}
+            {companyName && (
+              <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
+            )}
+          </h1>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={fetchFinanceData} 
+              className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Refresh data"
+            >
+              <RefreshCw size={16} className="text-gray-500" />
+            </button>
+            <Image src="/icons/investment.png" alt="Finance icon" width={20} height={20} />
+          </div>
         </div>
         
         <div className="flex flex-col items-center justify-center h-[calc(100%-40px)]">
-          <svg className="w-16 h-16 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-          </svg>
           <p className="text-gray-500 text-lg font-medium">Dados não encontrados</p>
           <p className="text-gray-400 text-sm text-center mt-1">
-            Não há dados de ordens disponíveis para exibir no gráfico financeiro.
+            Não há dados financeiros disponíveis para sua empresa.
           </p>
-          {error && (
+          {error && error !== "company_not_configured" && (
             <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs">
               Erro: {error}
             </div>
           )}
+          <button 
+            onClick={fetchFinanceData}
+            className="mt-4 px-3 py-1.5 bg-blue-500 text-white text-sm rounded flex items-center hover:bg-blue-600 transition-colors"
+          >
+            <RefreshCw size={14} className="mr-1.5" />
+            Tentar novamente
+          </button>
         </div>
       </div>
     );
@@ -183,8 +218,23 @@ const FinanceChart = () => {
   return (
     <div className="bg-white rounded-xl w-full h-full p-4">
       <div className="flex justify-between items-center mb-2">
-        <h1 className="text-lg font-semibold">Finance</h1>
-        <Image src="/icons/investment.png" alt="Finance icon" width={20} height={20} />
+        <h1 className="text-lg font-semibold flex items-center">
+          Finance
+          {/* MULTI-TENANT: Mostrar nome da empresa quando disponível */}
+          {companyName && (
+            <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
+          )}
+        </h1>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={fetchFinanceData} 
+            className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+            aria-label="Refresh data"
+          >
+            <RefreshCw size={16} className="text-gray-500" />
+          </button>
+          <Image src="/icons/investment.png" alt="Finance icon" width={20} height={20} />
+        </div>
       </div>
       
       {/* Display Total Amount Spent */}
@@ -219,7 +269,7 @@ const FinanceChart = () => {
               tickLine={false} 
               tickMargin={20}
             />
-            <Tooltip />
+            <Tooltip formatter={(value) => formatCurrency(value as number)} />
             <Legend
               align="center"
               verticalAlign="top"
@@ -243,10 +293,6 @@ const FinanceChart = () => {
             />
           </LineChart>
         </ResponsiveContainer>
-      </div>
-      
-      <div className="mt-2 text-xs text-gray-500">
-        <p>Dados atualizados em: {new Date().toLocaleDateString()}</p>
       </div>
     </div>
   );

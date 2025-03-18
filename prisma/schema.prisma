@@ -1,3 +1,5 @@
+// [2025-03-14 10:40:18] @sebastianascimento - Schema com ajustes para isolamento multi-tenant
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +10,85 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
+// Company - OK, já bem estruturado
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  products   Product[]
+  categories Category[]
+  brands     Brand[]
+  customers  Customer[]
+  suppliers  Supplier[]
+  orders     Order[]
+  stocks     Stock[]
+  shippings  Shipping[]
+
+  // Adicionar relações faltantes
+  employees       Employee[] // Novo
+  supplierReviews SupplierReview[] // Novo
+  reviews         Review[] // ADICIONADO: Relação com Reviews
+}
+
+// User - OK, já bem estruturado
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String?   @default("user")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
+  accounts Account[]
+  sessions Session[]
+}
+
+// NextAuth models - Sem alterações
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Admin - Sem companyId (assumindo ser global ao sistema)
 model Admin {
   id        Int      @id @default(autoincrement())
   username  String   @unique
@@ -16,40 +97,62 @@ model Admin {
   updatedAt DateTime @updatedAt
 }
 
+// Product - OK, já bem estruturado
 model Product {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
+  id          Int     @id @default(autoincrement())
+  name        String
   description String?
   price       Float
-  category    Category?  @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
-  categoryId  Int?
-  brand       Brand?     @relation(fields: [brandId], references: [id], map: "Product_brandId_fkey")
-  brandId     Int?
-  reviews     Review[]
-  stock       Stock[]
-  orders      Order[]
-  shippings   Shipping[]
-  supplier    Supplier?  @relation(fields: [supplierId], references: [id], map: "Product_supplierId_fkey")
-  supplierId  Int?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+
+  category   Category? @relation(fields: [categoryId], references: [id], map: "Product_categoryId_fkey")
+  categoryId Int?
+  brand      Brand?    @relation(fields: [brandId], references: [id], map: "Product_brandId_fkey")
+  brandId    Int?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], map: "Product_supplierId_fkey")
+  supplierId Int?
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  reviews   Review[]
+  stock     Stock[]
+  orders    Order[]
+  shippings Shipping[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, companyId])
 }
 
+// Category - OK
 model Category {
   id          Int       @id @default(autoincrement())
-  name        String    @unique
+  name        String
   description String?
   products    Product[]
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  @@unique([name, companyId])
 }
 
+// Brand - OK
 model Brand {
   id          Int       @id @default(autoincrement())
-  name        String    @unique
+  name        String
   logo        String?
   description String?
   products    Product[]
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  @@unique([name, companyId])
 }
 
+// Review - PRECISA ADICIONAR companyId
 model Review {
   id        Int      @id @default(autoincrement())
   rating    Int
@@ -57,8 +160,13 @@ model Review {
   product   Product  @relation(fields: [productId], references: [id])
   productId Int
   createdAt DateTime @default(now())
+
+  // NOVO: Adicionar relação com empresa
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 }
 
+// Order - OK
 model Order {
   id         Int         @id @default(autoincrement())
   product    Product     @relation(fields: [productId], references: [id])
@@ -69,23 +177,42 @@ model Order {
   date       DateTime    @default(now())
   quantity   Int
   status     OrderStatus
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 }
 
+// Customer - OK
 model Customer {
   id      Int     @id @default(autoincrement())
-  name    String  @unique
-  email   String  @unique
+  name    String
+  email   String
   address String
-  picture String? 
+  picture String?
   orders  Order[]
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  @@unique([name, companyId])
+  @@unique([email, companyId])
 }
 
+// Employee - PRECISA ADICIONAR companyId
 model Employee {
   id        Int        @id @default(autoincrement())
   name      String
   shippings Shipping[] @relation("ShippingEmployees")
+
+  // NOVO: Adicionar relação com empresa
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  // NOVO: Garantir unicidade por empresa
+  @@unique([name, companyId])
 }
 
+// Shipping - OK
 model Shipping {
   id                Int        @id @default(autoincrement())
   name              String
@@ -96,9 +223,13 @@ model Shipping {
   stockId           Int
   product           Product    @relation(fields: [productId], references: [id])
   productId         Int
-  employees         Employee[] @relation("ShippingEmployees") // Relação corrigida
+  employees         Employee[] @relation("ShippingEmployees")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 }
 
+// Stock - OK
 model Stock {
   id              Int              @id @default(autoincrement())
   product         Product          @relation(fields: [productId], references: [id])
@@ -108,17 +239,27 @@ model Stock {
   supplierId      Int
   supplierReviews SupplierReview[]
   shippings       Shipping[]
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 }
 
+// Supplier - OK
 model Supplier {
   id          Int              @id @default(autoincrement())
-  name        String           @unique
+  name        String
   contactInfo String
-  products    Product[] // Removendo campo de relação oposto
+  products    Product[]
   stock       Stock[]
   reviews     SupplierReview[]
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  @@unique([name, companyId])
 }
 
+// SupplierReview - PRECISA ADICIONAR companyId
 model SupplierReview {
   id         Int      @id @default(autoincrement())
   rating     Int
@@ -128,6 +269,10 @@ model SupplierReview {
   createdAt  DateTime @default(now())
   stock      Stock?   @relation(fields: [stockId], references: [id])
   stockId    Int?
+
+  // NOVO: Adicionar relação com empresa
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 }
 
 enum OrderStatus {

@@ -1,54 +1,63 @@
+// [2025-03-14 14:56:27] @sebastianascimento - Middleware para multi-tenant
 import { NextResponse } from 'next/server';
-import { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-
-// Valores constantes para logs
-const CURRENT_DATE = "2025-03-13 11:48:00";
-const CURRENT_USER = "sebastianascimento";
+import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-  
-  // Rotas públicas que não precisam de autenticação
-  const publicPaths = ['/login', '/register', '/api/auth', '/', '/api/webhooks'];
-  
-  if (publicPaths.some(publicPath => path.startsWith(publicPath))) {
+  // Ignorar rotas públicas
+  if (
+    request.nextUrl.pathname.startsWith('/api/auth') ||
+    request.nextUrl.pathname.startsWith('/_next') ||
+    request.nextUrl.pathname === '/signin' ||
+    request.nextUrl.pathname === '/signup' ||
+    request.nextUrl.pathname === '/setup-company' ||
+    request.nextUrl.pathname.startsWith('/setup-company')
+  ) {
     return NextResponse.next();
   }
   
-  const session = await getToken({
+  // Obter o token JWT
+  const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET
   });
   
-  // Se não estiver autenticado, redirecionar para login
-  if (!session) {
-    console.log(`[${CURRENT_DATE}] Unauthorized access attempt to ${path}`);
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Se não está autenticado, redirecionar para login
+  if (!token) {
+    console.log(`[2025-03-14 14:56:27] @sebastianascimento - Usuário não autenticado tentando acessar ${request.nextUrl.pathname}`);
+    return NextResponse.redirect(new URL('/signin', request.url));
   }
   
-  console.log(`[${CURRENT_DATE}] User ${CURRENT_USER} accessing ${path}`);
-  
-  // Adicionar cabeçalhos com informações de usuário e empresa para API routes
-  if (path.startsWith('/api/')) {
-    // Passa informações de contexto para as rotas da API via cabeçalhos
-    const response = NextResponse.next();
-    
-    if (session.email) response.headers.set('X-User-Email', session.email as string);
-    if (session.companyId) response.headers.set('X-Company-Id', session.companyId as string);
-    
-    return response;
+  // Se não tem companyId, redirecionar para setup
+  if (!token.companyId) {
+    console.log(`[2025-03-14 14:56:27] @sebastianascimento - Usuário ${token.email} sem companyId`);
+    return NextResponse.redirect(new URL('/setup-company', request.url));
   }
   
-  return NextResponse.next();
+  // Prosseguir com o request e adicionar headers úteis
+  const response = NextResponse.next();
+  
+
+  response.headers.set('x-tenant-id', token.companyId as string);
+  response.headers.set('x-user-email', token.email as string);
+  
+  return response;
 }
+
 
 export const config = {
   matcher: [
-    '/dashboard/:path*', 
-    '/api/:path*',
-    '/inventory/:path*',
-    '/orders/:path*',
-    '/profile/:path*'
+    // Rotas das páginas
+    '/dashboard/:path*',
+    '/profile',
+    '/list/:path*',
+    '/create/:path*',
+    '/edit/:path*',
+    '/',
+    // Rotas das APIs que precisam de proteção
+    '/api/list/:path*',
+    '/api/create/:path*',
+    '/api/update/:path*',
+    '/api/delete/:path*',
   ],
 };

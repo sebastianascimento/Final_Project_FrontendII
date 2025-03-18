@@ -2,60 +2,227 @@
 
 import { prisma } from "./prisma";
 import { revalidatePath } from "next/cache";
-import {  CustomerSchema, OrderSchema, ProductSchema, ShippingSchema, StockSchema,} from "./formValidationSchemas";
+import { CustomerSchema, OrderSchema, ProductSchema, ShippingSchema, StockSchema } from "./formValidationSchemas";
+import { getServerSession } from "next-auth"; 
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-type CurrentState = { success: boolean; error: boolean ; message?: string;};
+type CurrentState = { success: boolean; error: boolean; message?: string; };
+type ActionResult = { success: boolean; error: boolean; message?: string; };
 
-type ActionResult = { 
-  success: boolean; 
-  error: boolean;
-  message?: string;
-};
+
+async function getCompanyId(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  
+  if (!session?.user?.email) {
+    throw new Error("Usuário não autenticado");
+  }
+  
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    include: { company: true }
+  });
+  
+  const companyId = session?.user?.companyId || user?.companyId;
+  
+  if (companyId) {
+    return companyId;
+  }
+  
+  if (user) {
+    const company = await prisma.company.create({
+      data: { name: `Empresa de ${user.name || user.email.split('@')[0]}` }
+    });
+    
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { companyId: company.id }
+    });
+    
+    return company.id;
+  }
+  
+  throw new Error("Não foi possível obter ou criar empresa para o usuário");
+}
+
+// Função reutilizável para garantir que um registro pertence à empresa do usuário
+async function validateOwnership<T extends { id: number; companyId?: string }>(
+  model: any,
+  id: number,
+  errorMessage: string = "Registro não encontrado ou não pertence à sua empresa"
+): Promise<T> {
+  const companyId = await getCompanyId();
+  
+  const record = await model.findFirst({
+    where: { id, companyId }
+  });
+  
+  if (!record) {
+    throw new Error(errorMessage);
+  }
+  
+  return record;
+}
+
+// Função para encontrar ou criar uma entidade relacionada com segurança multi-tenant
+async function findOrCreateRelated(
+  model: any, 
+  name: string, 
+  additionalData: Record<string, any> = {}
+) {
+  const companyId = await getCompanyId();
+  
+  // Tentar encontrar a entidade existente
+  const existing = await model.findFirst({
+    where: { name, companyId }
+  });
+  
+  if (existing) {
+    return existing.id;
+  }
+  
+  // Criar nova entidade
+  const created = await model.create({
+    data: {
+      name,
+      ...additionalData,
+      companyId
+    }
+  });
+  
+  return created.id;
+}
+
+
+export async function createCompany(companyName: string) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.email) {
+      return { error: true, message: "Usuário não autenticado" };
+    }
+    
+    const existingUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { company: true },
+    });
+    
+    if (existingUser?.companyId) {
+      return {
+        error: false,
+        companyId: existingUser.companyId,
+        companyName: existingUser.company?.name || companyName,
+      };
+    }
+    
+    const company = await prisma.company.create({
+      data: { name: companyName }
+    });
+    
+    await prisma.user.update({
+      where: { email: session.user.email },
+      data: { companyId: company.id },
+    });
+    
+    return {
+      error: false,
+      companyId: company.id,
+      companyName: company.name,
+    };
+  } catch (error) {
+    return { error: true, message: "Erro ao criar empresa" };
+  }
+}
+
+
 
 export const createProduct = async (
   currentState: CurrentState,
   data: ProductSchema
 ) => {
   try {
-    await prisma.product.create({
+    const companyId = await getCompanyId();
+    
+    // Lidar com relações usando a função helper
+    const categoryId = data.categoryName 
+      ? await findOrCreateRelated(prisma.category, data.categoryName)
+      : undefined;
+      
+    const brandId = data.brandName 
+      ? await findOrCreateRelated(prisma.brand, data.brandName)
+      : undefined;
+      
+    const supplierId = data.supplierName 
+      ? await findOrCreateRelated(prisma.supplier, data.supplierName, {
+          contactInfo: data.supplierContactInfo || `Contact info for ${data.supplierName}`
+        })
+      : undefined;
+    
+    // Criar produto
+    const product = await prisma.product.create({
       data: {
         name: data.name,
         description: data.description,
         price: data.price,
-        category: {
-          connectOrCreate: {
-            where: { name: data.categoryName },
-            create: { name: data.categoryName }
-          },
-        },
-        brand: {
-          connectOrCreate: {
-            where: { name: data.brandName },
-            create: { name: data.brandName }
-          },
-        },
-        supplier: {
-          connectOrCreate: {
-            where: { name: data.supplierName } as any,
-            create: { 
-              name: data.supplierName,
-              contactInfo: data.supplierContactInfo || `Contact info for ${data.supplierName}`
-            }
-          },
-        },
+        companyId,
+        categoryId,
+        brandId,
+        supplierId
       },
     });
-
+    
     revalidatePath("/list/products");
-    currentState.success = true;
-    currentState.error = false;
+    return { success: true, error: false };
   } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro desconhecido" 
+    };
   }
 };
 
+export async function listProducts(
+  filter = {}, 
+  page = 1, 
+  limit = 10, 
+  sort = { field: 'updatedAt', direction: 'desc' }
+) {
+  try {
+    const companyId = await getCompanyId();
+    const secureFilter = { ...filter, companyId };
+    const skip = (page - 1) * limit;
+    
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where: secureFilter,
+        skip,
+        take: limit,
+        orderBy: sort ? { [sort.field]: sort.direction } : { updatedAt: 'desc' },
+        include: { category: true, brand: true, supplier: true }
+      }),
+      prisma.product.count({ where: secureFilter })
+    ]);
+    
+    return {
+      success: true,
+      data: products,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: true,
+      message: error instanceof Error ? error.message : "Erro ao listar produtos",
+      data: [],
+      pagination: { total: 0, page, limit, totalPages: 0 }
+    };
+  }
+}
 
 export const updateProduct = async (
   currentState: CurrentState,
@@ -66,45 +233,46 @@ export const updateProduct = async (
       throw new Error("Product ID is required for update");
     }
     
-    console.log(`Updating product with ID: ${data.id}`);
+    // Validar propriedade do produto
+    await validateOwnership(prisma.product, data.id);
+    const companyId = await getCompanyId();
+    
+    // Lidar com relações usando a função helper
+    const categoryId = data.categoryName 
+      ? await findOrCreateRelated(prisma.category, data.categoryName)
+      : undefined;
+      
+    const brandId = data.brandName 
+      ? await findOrCreateRelated(prisma.brand, data.brandName)
+      : undefined;
+      
+    const supplierId = data.supplierName 
+      ? await findOrCreateRelated(prisma.supplier, data.supplierName, {
+          contactInfo: data.supplierContactInfo || `Contact info for ${data.supplierName}`
+        })
+      : undefined;
 
+    // Atualizar produto
     await prisma.product.update({
-      where: {
-        id: data.id, 
-      },
+      where: { id: data.id },
       data: {
         name: data.name,
         description: data.description,
         price: data.price,
-        category: {
-          connectOrCreate: {
-            where: { name: data.categoryName },
-            create: { name: data.categoryName }
-          },
-        },
-        brand: {
-          connectOrCreate: {
-            where: { name: data.brandName },
-            create: { name: data.brandName }
-          },
-        },
-        supplier: {
-          connectOrCreate: {
-            where: { name: data.supplierName } as any,
-            create: { 
-              name: data.supplierName,
-              contactInfo: data.supplierContactInfo || `Contact info for ${data.supplierName}`
-            }
-          },
-        },
+        categoryId,
+        brandId,
+        supplierId
       },
     });
 
     revalidatePath("/list/products");
     return { success: true, error: false };
   } catch (err) {
-    console.log("Error in updateProduct:", err);
-    return { success: false, error: true };
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro desconhecido" 
+    };
   }
 };
 
@@ -115,80 +283,112 @@ export const deleteProduct = async (
   const id = data.get("id") as string;
   
   if (!id) {
-    console.error("No ID provided for product deletion");
-    return { success: false, error: true };
+    return { success: false, error: true, message: "ID não fornecido" };
   }
   
   try {
-    console.log(`Deleting product with ID: ${id}`);
+    const productId = parseInt(id);
+    
+    // Validar propriedade do produto
+    await validateOwnership(prisma.product, productId);
+    
+    // Excluir o produto
     await prisma.product.delete({
-      where: {
-        id: parseInt(id),
-      },
+      where: { id: productId },
     });
 
     revalidatePath("/list/products");
     return { success: true, error: false };
   } catch (err) {
-    console.error("Error deleting product:", err);
-    return { success: false, error: true };
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro desconhecido"
+    };
   }
 };
 
 
 export const createOrder = async (
-  currentState: CurrentState,
+  currentState: { success: boolean; error: boolean; message?: string },
   data: OrderSchema
-) => {
+): Promise<{ success: boolean; error: boolean; message?: string }> => {
   try {
+    // Obter ID da empresa para isolamento multi-tenant
+    const companyId = await getCompanyId();
+    
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criando pedido para empresa ${companyId}`);
+    
     // --- Primeiro, encontre ou crie o produto ---
     let productId: number;
     const existingProduct = await prisma.product.findFirst({
-      where: { name: data.product }
+      where: { 
+        name: data.product,
+        companyId // MULTI-TENANT: Garantir que é da mesma empresa
+      }
     });
 
     if (existingProduct) {
       productId = existingProduct.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Usando produto existente: ${existingProduct.name} (ID: ${existingProduct.id})`);
     } else {
-      // --- Se precisamos criar um produto, precisamos primeiro tratar das relações ---
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criando novo produto: ${data.product}`);
       
-      // 1. Encontrar ou criar categoria
+      // --- Se precisamos criar um produto, precisamos primeiro tratar das relações ---
+      // 1. Encontrar ou criar categoria padrão
       let categoryId: number | undefined;
       const categoryName = "Default Category";
       const existingCategory = await prisma.category.findFirst({
-        where: { name: categoryName }
+        where: { 
+          name: categoryName,
+          companyId // MULTI-TENANT
+        }
       });
       
       if (existingCategory) {
         categoryId = existingCategory.id;
       } else {
         const newCategory = await prisma.category.create({
-          data: { name: categoryName }
+          data: { 
+            name: categoryName,
+            companyId // MULTI-TENANT: Associar categoria à empresa
+          }
         });
         categoryId = newCategory.id;
+        console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criada categoria padrão: ${newCategory.id}`);
       }
       
-      // 2. Encontrar ou criar marca
+      // 2. Encontrar ou criar marca padrão
       let brandId: number | undefined;
       const brandName = "Default Brand";
       const existingBrand = await prisma.brand.findFirst({
-        where: { name: brandName }
+        where: { 
+          name: brandName,
+          companyId // MULTI-TENANT
+        }
       });
       
       if (existingBrand) {
         brandId = existingBrand.id;
       } else {
         const newBrand = await prisma.brand.create({
-          data: { name: brandName }
+          data: { 
+            name: brandName,
+            companyId // MULTI-TENANT: Associar marca à empresa
+          }
         });
         brandId = newBrand.id;
+        console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criada marca padrão: ${newBrand.id}`);
       }
       
-      // 3. Encontrar ou criar fornecedor
+      // 3. Encontrar ou criar fornecedor padrão
       let supplierId: number | undefined;
       const supplierName = "Default Supplier";
       const existingSupplier = await prisma.supplier.findFirst({
-        where: { name: supplierName }
+        where: { 
+          name: supplierName,
+          companyId // MULTI-TENANT
+        }
       });
       
       if (existingSupplier) {
@@ -197,154 +397,195 @@ export const createOrder = async (
         const newSupplier = await prisma.supplier.create({
           data: { 
             name: supplierName,
-            contactInfo: "Default Contact Info"
+            contactInfo: "Default Contact Info",
+            companyId // MULTI-TENANT: Associar fornecedor à empresa
           }
         });
         supplierId = newSupplier.id;
+        console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criado fornecedor padrão: ${newSupplier.id}`);
       }
       
-      // Agora crie o produto com todas as relações por ID
+      // Agora crie o produto com todas as relações por ID e companyId
       const newProduct = await prisma.product.create({
         data: {
           name: data.product,
-          description: "",
+          description: "Produto criado automaticamente pelo sistema de pedidos",
           price: 0,
           categoryId,
           brandId,
-          supplierId
+          supplierId,
+          companyId // MULTI-TENANT: Associar produto à empresa
         }
       });
       
       productId = newProduct.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Produto criado: ${newProduct.id}`);
     }
 
     // --- Encontre ou crie o cliente ---
     let customerId: number;
     const existingCustomer = await prisma.customer.findFirst({
-      where: { name: data.customer }
+      where: { 
+        name: data.customer,
+        companyId // MULTI-TENANT: Garantir que é da mesma empresa
+      }
     });
 
     if (existingCustomer) {
       customerId = existingCustomer.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Usando cliente existente: ${existingCustomer.name} (ID: ${existingCustomer.id})`);
     } else {
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Criando novo cliente: ${data.customer}`);
       const newCustomer = await prisma.customer.create({
         data: {
           name: data.customer,
           email: `${data.customer.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-          address: data.address || "Default Address",
+          address: data.address || "Endereço não especificado",
+          companyId // MULTI-TENANT: Associar cliente à empresa
         }
       });
       customerId = newCustomer.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Cliente criado: ${newCustomer.id}`);
     }
 
-    await prisma.order.create({
+    // Criar o pedido com companyId
+    const order = await prisma.order.create({
       data: {
         quantity: data.quantity,
-        address: data.address || "Default Address",
-        status: data.status as any,  
-        productId,  
-        customerId  
+        address: data.address || "Endereço não especificado",
+        status: data.status,
+        productId,
+        customerId,
+        companyId // MULTI-TENANT: Associar pedido à empresa
       },
     });
 
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Pedido criado com sucesso: ${order.id}`);
+
     revalidatePath("/list/orders");
-    currentState.success = true;
-    currentState.error = false;
+    return { 
+      success: true, 
+      error: false, 
+      message: `Pedido #${order.id} criado com sucesso` 
+    };
   } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
+    console.error("[2025-03-14 15:47:57] @sebastianascimento - Erro ao criar pedido:", err);
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro ao processar pedido" 
+    };
   }
 };
 
+/**
+ * Função para atualizar um pedido existente com verificação de propriedade multi-tenant
+ */
 export const updateOrder = async (
-  currentState: CurrentState,
+  currentState: { success: boolean; error: boolean; message?: string },
   data: OrderSchema
-) => {
+): Promise<{ success: boolean; error: boolean; message?: string }> => {
   try {
     if (!data.id) {
-      throw new Error("Order ID is required for update");
+      throw new Error("ID do pedido é necessário para atualização");
+    }
+    
+    // Obter ID da empresa para isolamento multi-tenant
+    const companyId = await getCompanyId();
+    
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Atualizando pedido ${data.id} para empresa ${companyId}`);
+    
+    // MULTI-TENANT: Verificar se o pedido pertence à empresa do usuário
+    const orderExists = await prisma.order.findFirst({
+      where: {
+        id: data.id,
+        companyId
+      }
+    });
+    
+    if (!orderExists) {
+      throw new Error("Pedido não encontrado ou não pertence à sua empresa");
     }
 
+    // --- Verificar e obter produto ---
     let productId: number;
     const existingProduct = await prisma.product.findFirst({
-      where: { name: data.product }
+      where: { 
+        name: data.product,
+        companyId // MULTI-TENANT: Garantir que é da mesma empresa
+      }
     });
 
     if (existingProduct) {
       productId = existingProduct.id;
     } else {
-      
-      // 1. Encontrar ou criar categoria
+      // Se o produto não existe, criar um novo com relacionamentos padrão
+      // (código similar ao da função createOrder para criar um produto)
+      // 1. Encontrar ou criar categoria padrão
       let categoryId: number | undefined;
       const categoryName = "Default Category";
       const existingCategory = await prisma.category.findFirst({
-        where: { name: categoryName }
+        where: { name: categoryName, companyId }
       });
       
       if (existingCategory) {
         categoryId = existingCategory.id;
       } else {
         const newCategory = await prisma.category.create({
-          data: { name: categoryName }
+          data: { name: categoryName, companyId }
         });
         categoryId = newCategory.id;
       }
       
-      // 2. Encontrar ou criar marca
-      let brandId: number | undefined;
-      const brandName = "Default Brand";
-      const existingBrand = await prisma.brand.findFirst({
-        where: { name: brandName }
-      });
+      // 2 & 3. Obter ou criar brand e supplier (código similar ao anterior)
+      let brandId = (await prisma.brand.findFirst({ 
+        where: { name: "Default Brand", companyId }
+      }))?.id;
       
-      if (existingBrand) {
-        brandId = existingBrand.id;
-      } else {
-        const newBrand = await prisma.brand.create({
-          data: { name: brandName }
-        });
-        brandId = newBrand.id;
+      if (!brandId) {
+        brandId = (await prisma.brand.create({
+          data: { name: "Default Brand", companyId }
+        })).id;
       }
       
-      // 3. Encontrar ou criar fornecedor
-      let supplierId: number | undefined;
-      const supplierName = "Default Supplier";
-      const existingSupplier = await prisma.supplier.findFirst({
-        where: { name: supplierName }
-      });
+      let supplierId = (await prisma.supplier.findFirst({ 
+        where: { name: "Default Supplier", companyId }
+      }))?.id;
       
-      if (existingSupplier) {
-        supplierId = existingSupplier.id;
-      } else {
-        const newSupplier = await prisma.supplier.create({
+      if (!supplierId) {
+        supplierId = (await prisma.supplier.create({
           data: { 
-            name: supplierName,
-            contactInfo: "Default Contact Info"
+            name: "Default Supplier", 
+            contactInfo: "Default Contact Info",
+            companyId
           }
-        });
-        supplierId = newSupplier.id;
+        })).id;
       }
       
-      // Agora crie o produto com todas as relações por ID
+      // Criar produto
       const newProduct = await prisma.product.create({
         data: {
           name: data.product,
-          description: "",
+          description: "Produto criado durante atualização de pedido",
           price: 0,
           categoryId,
           brandId,
-          supplierId
+          supplierId,
+          companyId
         }
       });
       
       productId = newProduct.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Novo produto criado durante atualização: ${newProduct.id}`);
     }
 
-    // --- Encontre ou crie o cliente ---
+    // --- Verificar e obter cliente ---
     let customerId: number;
     const existingCustomer = await prisma.customer.findFirst({
-      where: { name: data.customer }
+      where: { 
+        name: data.customer,
+        companyId // MULTI-TENANT
+      }
     });
 
     if (existingCustomer) {
@@ -354,83 +595,112 @@ export const updateOrder = async (
         data: {
           name: data.customer,
           email: `${data.customer.toLowerCase().replace(/\s+/g, '.')}@example.com`,
-          address: data.address || "Default Address",
+          address: data.address || "Endereço não especificado",
+          companyId // MULTI-TENANT
         }
       });
       customerId = newCustomer.id;
+      console.log(`[2025-03-14 15:47:57] @sebastianascimento - Novo cliente criado durante atualização: ${newCustomer.id}`);
     }
 
     // --- Agora atualize o pedido existente ---
-    await prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: {
         id: data.id
       },
       data: {
         quantity: data.quantity,
-        address: data.address || "Default Address",
-        status: data.status as any,  // Convertemos para o enum
-        productId,  // Conecta diretamente usando o ID
-        customerId  // Conecta diretamente usando o ID
+        address: data.address || orderExists.address,
+        status: data.status,
+        productId,
+        customerId
+        // Não atualizamos companyId para evitar alteração de propriedade entre empresas
       },
     });
 
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Pedido atualizado com sucesso: ${updatedOrder.id}`);
+
     revalidatePath("/list/orders");
-    currentState.success = true;
-    currentState.error = false;
-    return currentState;
+    return { 
+      success: true, 
+      error: false, 
+      message: `Pedido #${updatedOrder.id} atualizado com sucesso`
+    };
   } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
-    return currentState;
+    console.error("[2025-03-14 15:47:57] @sebastianascimento - Erro ao atualizar pedido:", err);
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro ao atualizar pedido"
+    };
   }
 };
 
+/**
+ * Função para excluir um pedido com verificação de propriedade multi-tenant
+ */
 export const deleteOrder = async (
-  currentState: CurrentState,
+  currentState: { success: boolean; error: boolean; message?: string },
   data: FormData
-) => {
+): Promise<{ success: boolean; error: boolean; message?: string }> => {
   const id = data.get("id") as string;
   
-  console.log("Tentando excluir pedido - ID recebido:", id, "Tipo:", typeof id);
+  console.log("[2025-03-14 15:47:57] @sebastianascimento - Tentando excluir pedido - ID recebido:", id);
   
   if (!id) {
-    console.error("No ID provided for order deletion");
-    return { success: false, error: true, message: "ID do pedido não fornecido" };
+    return { 
+      success: false, 
+      error: true, 
+      message: "ID do pedido não fornecido" 
+    };
   }
   
   try {
-    // Certifique-se que o ID é um número
     const orderId = Number(id);
     
     if (isNaN(orderId)) {
-      console.error(`Invalid order ID: ${id} is not a number`);
-      return { success: false, error: true, message: "ID do pedido inválido" };
+      return { 
+        success: false, 
+        error: true, 
+        message: "ID do pedido inválido" 
+      };
     }
     
-    // Verificar se o pedido existe
-    const orderExists = await prisma.order.findUnique({
-      where: { id: orderId }
+    const companyId = await getCompanyId();
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Verificando propriedade do pedido ${orderId} para empresa ${companyId}`);
+    
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        companyId 
+      }
     });
     
-    if (!orderExists) {
-      console.error(`Order with ID ${orderId} does not exist`);
-      return { success: false, error: true, message: "Pedido não encontrado" };
+    if (!order) {
+      return { 
+        success: false, 
+        error: true, 
+        message: "Pedido não encontrado ou não pertence à sua empresa" 
+      };
     }
     
-    console.log(`Encontrado pedido com ID ${orderId}, prosseguindo com exclusão`);
-    
-    // Agora que confirmamos que o pedido existe, vamos excluí-lo
+    // Excluir o pedido
     await prisma.order.delete({
-      where: { id: orderId }
+      where: {
+        id: orderId
+      }
     });
     
-    console.log(`Pedido ${orderId} excluído com sucesso`);
+    console.log(`[2025-03-14 15:47:57] @sebastianascimento - Pedido ${orderId} excluído com sucesso`);
     revalidatePath("/list/orders");
-    return { success: true, error: false };
     
+    return { 
+      success: true, 
+      error: false,
+      message: `Pedido #${orderId} excluído com sucesso`
+    };
   } catch (err) {
-    console.error("Erro detalhado ao excluir pedido:", err);
+    console.error("[2025-03-14 15:47:57] @sebastianascimento - Erro ao excluir pedido:", err);
     
     // Verificar se é um erro específico do Prisma
     if (typeof err === 'object' && err !== null) {
@@ -445,31 +715,37 @@ export const deleteOrder = async (
       }
     }
     
-    return { success: false, error: true, message: "Erro ao excluir o pedido" };
+    return { 
+      success: false, 
+      error: true, 
+      message: "Erro ao excluir o pedido" 
+    };
   }
 };
 
+
 export const createCustomer = async (
-  currentState: { success: boolean; error: boolean },
+  currentState: CurrentState,
   data: CustomerSchema
 ) => {
   try {
-    // Verificar se já existe um cliente com o mesmo nome ou e-mail
+    const companyId = await getCompanyId();
+    
+    // Verificar se já existe um cliente com o mesmo nome ou e-mail na mesma empresa
     const existingCustomer = await prisma.customer.findFirst({
       where: {
         OR: [
           { name: data.name },
           { email: data.email }
-        ]
+        ],
+        companyId
       }
     });
 
     if (existingCustomer) {
-      console.log(`Customer with name "${data.name}" or email "${data.email}" already exists`);
-      currentState.success = false;
-      currentState.error = true;
       return { 
-        ...currentState, 
+        success: false, 
+        error: true, 
         message: existingCustomer.name === data.name 
           ? "Um cliente com este nome já existe" 
           : "Um cliente com este e-mail já existe" 
@@ -482,20 +758,19 @@ export const createCustomer = async (
         name: data.name,
         email: data.email,
         address: data.address,
-        picture: data.picture || null,  // Usar null se não houver imagem
+        picture: data.picture || null,
+        companyId  // Importante: Associar cliente à empresa
       },
     });
 
-    console.log(`Customer "${data.name}" created successfully`);
-    revalidatePath("/list/customers");
-    currentState.success = true;
-    currentState.error = false;
-    return currentState;
+    revalidatePath("/list/clients");
+    return { success: true, error: false };
   } catch (err) {
-    console.error("Error creating customer:", err);
-    currentState.success = false;
-    currentState.error = true;
-    return { ...currentState, message: "Erro ao criar cliente" };
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro desconhecido" 
+    };
   }
 };
 
@@ -508,36 +783,27 @@ export const updateCustomer = async (
       throw new Error("Customer ID is required for update");
     }
     
-    // Verificar se o cliente existe
-    const existingCustomer = await prisma.customer.findUnique({
-      where: { id: data.id }
-    });
+    // Validar propriedade do cliente
+    await validateOwnership(prisma.customer, data.id);
+    const companyId = await getCompanyId();
     
-    if (!existingCustomer) {
-      console.error(`Customer with ID ${data.id} not found`);
-      currentState.success = false;
-      currentState.error = true;
-      return { ...currentState, message: "Cliente não encontrado" };
-    }
-    
-    // Verificar se o nome ou email já está em uso por outro cliente
-    if (existingCustomer.name !== data.name || existingCustomer.email !== data.email) {
+    // Verificar duplicatas apenas na mesma empresa
+    if (data.name || data.email) {
       const duplicateCheck = await prisma.customer.findFirst({
         where: {
           OR: [
-            { name: data.name },
-            { email: data.email }
+            data.name ? { name: data.name } : {},
+            data.email ? { email: data.email } : {}
           ],
-          NOT: { id: data.id }
+          NOT: { id: data.id },
+          companyId
         }
       });
       
       if (duplicateCheck) {
-        console.log(`Name "${data.name}" or email "${data.email}" already in use by another customer`);
-        currentState.success = false;
-        currentState.error = true;
         return { 
-          ...currentState, 
+          success: false, 
+          error: true, 
           message: duplicateCheck.name === data.name 
             ? "Este nome já está em uso por outro cliente" 
             : "Este e-mail já está em uso por outro cliente" 
@@ -556,16 +822,14 @@ export const updateCustomer = async (
       },
     });
 
-    console.log(`Customer ${data.id} updated successfully`);
     revalidatePath("/list/customers");
-    currentState.success = true;
-    currentState.error = false;
-    return currentState;
+    return { success: true, error: false };
   } catch (err) {
-    console.error("Error updating customer:", err);
-    currentState.success = false;
-    currentState.error = true;
-    return { ...currentState, message: "Erro ao atualizar cliente" };
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro ao atualizar cliente" 
+    };
   }
 };
 
@@ -576,79 +840,361 @@ export const deleteCustomer = async (
   const id = data.get("id") as string;
   
   if (!id) {
-    console.error("No ID provided for customer deletion");
     return { success: false, error: true, message: "ID do cliente não fornecido" };
   }
   
   try {
     const customerId = Number(id);
     
-    if (isNaN(customerId)) {
-      return { success: false, error: true, message: "ID do cliente inválido" };
-    }
+    // Validar propriedade do cliente
+    await validateOwnership(prisma.customer, customerId);
     
-    // Verificar se o cliente tem pedidos associados
+    // Verificar se tem pedidos associados
     const customerWithOrders = await prisma.customer.findUnique({
       where: { id: customerId },
       include: { orders: { take: 1 } }
     });
     
-    if (!customerWithOrders) {
-      return { success: false, error: true, message: "Cliente não encontrado" };
-    }
-    
-    // Se o cliente tem pedidos, não permitir a exclusão
-    if (customerWithOrders.orders.length > 0) {
-      return { 
-        success: false, 
-        error: true, 
-        message: "Este cliente possui pedidos associados e não pode ser excluído" 
+    if (customerWithOrders?.orders.length) {
+      return {
+        success: false,
+        error: true,
+        message: "Este cliente possui pedidos associados e não pode ser excluído"
       };
     }
     
-    // Se não tem pedidos, podemos excluir
+    // Excluir o cliente
     await prisma.customer.delete({
       where: { id: customerId }
     });
     
-    console.log(`Customer ${customerId} deleted successfully`);
     revalidatePath("/list/customers");
     return { success: true, error: false };
-    
   } catch (err) {
-    console.error("Error deleting customer:", err);
-    return { success: false, error: true, message: "Erro ao excluir o cliente" };
+    return { 
+      success: false, 
+      error: true, 
+      message: err instanceof Error ? err.message : "Erro ao excluir cliente" 
+    };
   }
 };
 
+export async function createShipping(
+  currentState: { success: boolean; error: boolean },
+  data: ShippingSchema
+): Promise<{ success: boolean; error: boolean; message?: string }> {
+  try {
+    // MULTI-TENANT: Obter ID da empresa do usuário
+    const companyId = await getCompanyId();
+    
+    if (!companyId) {
+      return {
+        success: false,
+        error: true,
+        message: "Empresa não configurada. Configure sua empresa antes de continuar."
+      };
+    }
+    
+    console.log(`[2025-03-14 16:35:26] @sebastianascimento - Criando envio para empresa ${companyId}`);
+    
+    // Verificar se o estoque existe e pertence à empresa do usuário
+    const stock = await prisma.stock.findFirst({
+      where: {
+        id: data.stockId,
+        companyId // MULTI-TENANT: Verificação de propriedade
+      },
+      include: {
+        product: true
+      }
+    });
+    
+    if (!stock) {
+      return {
+        success: false,
+        error: true,
+        message: "Estoque não encontrado ou não pertence à sua empresa"
+      };
+    }
+    
+    // Verificar se o produto no estoque corresponde ao produto selecionado
+    if (stock.productId !== data.productId) {
+      return {
+        success: false,
+        error: true,
+        message: "O estoque selecionado não corresponde ao produto"
+      };
+    }
+    
+    // Verificar se há estoque disponível
+    if (stock.stockLevel <= 0) {
+      return {
+        success: false,
+        error: true,
+        message: "Estoque insuficiente para criar envio"
+      };
+    }
+
+    // Criar envio
+    const shipping = await prisma.shipping.create({
+      data: {
+        name: data.name,
+        status: data.status,
+        carrier: data.carrier,
+        estimatedDelivery: data.estimatedDelivery,
+        stockId: data.stockId,
+        productId: data.productId,
+        companyId // MULTI-TENANT: Associar à empresa do usuário
+      },
+    });
+    
+    // Diminuir o nível de estoque em 1 (opcional - depende da regra de negócio)
+    await prisma.stock.update({
+      where: { id: data.stockId },
+      data: {
+        stockLevel: {
+          decrement: 1
+        }
+      }
+    });
+    
+    console.log(`[2025-03-14 16:35:26] @sebastianascimento - Envio criado com ID: ${shipping.id}`);
+    
+    revalidatePath("/list/shippings");
+    revalidatePath("/list/stocks");
+    
+    return {
+      success: true,
+      error: false,
+      message: "Envio criado com sucesso"
+    };
+  } catch (error) {
+    console.error("[2025-03-14 16:35:26] @sebastianascimento - Erro ao criar envio:", error);
+    
+    return {
+      success: false,
+      error: true,
+      message: error instanceof Error ? error.message : "Erro ao criar envio"
+    };
+  }
+}
+
+/**
+ * Atualiza um registro de envio existente com verificação multi-tenant
+ */
+export async function updateShipping(
+  currentState: { success: boolean; error: boolean },
+  data: ShippingSchema
+): Promise<{ success: boolean; error: boolean; message?: string }> {
+  if (!data.id) {
+    return {
+      ...currentState,
+      error: true,
+      message: "ID do envio é necessário para atualização"
+    };
+  }
+  
+  try {
+    // MULTI-TENANT: Obter ID da empresa do usuário
+    const companyId = await getCompanyId();
+    
+    if (!companyId) {
+      return {
+        success: false,
+        error: true,
+        message: "Empresa não configurada. Configure sua empresa antes de continuar."
+      };
+    }
+    
+    console.log(`[2025-03-14 16:35:26] @sebastianascimento - Atualizando envio ${data.id} para empresa ${companyId}`);
+    
+    // Verificar se o envio existe e pertence à empresa do usuário
+    const existingShipping = await prisma.shipping.findFirst({
+      where: {
+        id: data.id,
+        companyId // MULTI-TENANT: Verificação de propriedade
+      }
+    });
+    
+    if (!existingShipping) {
+      return {
+        success: false,
+        error: true,
+        message: "Envio não encontrado ou não pertence à sua empresa"
+      };
+    }
+    
+    // Se o stock está sendo alterado, verificações adicionais são necessárias
+    if (data.stockId !== existingShipping.stockId) {
+      // Verificar se o novo estoque existe e pertence à empresa
+      const newStock = await prisma.stock.findFirst({
+        where: {
+          id: data.stockId,
+          companyId
+        }
+      });
+      
+      if (!newStock) {
+        return {
+          success: false,
+          error: true,
+          message: "Novo estoque não encontrado ou não pertence à sua empresa"
+        };
+      }
+      
+      // Verificar se o produto no novo estoque corresponde ao produto selecionado
+      if (newStock.productId !== data.productId) {
+        return {
+          success: false,
+          error: true,
+          message: "O estoque selecionado não corresponde ao produto"
+        };
+      }
+      
+      // Verificar se há estoque disponível
+      if (newStock.stockLevel <= 0) {
+        return {
+          success: false,
+          error: true,
+          message: "Estoque insuficiente para atribuir ao envio"
+        };
+      }
+      
+      // Decrementar o novo estoque e incrementar o antigo
+      await prisma.$transaction([
+        prisma.stock.update({
+          where: { id: data.stockId },
+          data: {
+            stockLevel: {
+              decrement: 1
+            }
+          }
+        }),
+        prisma.stock.update({
+          where: { id: existingShipping.stockId },
+          data: {
+            stockLevel: {
+              increment: 1
+            }
+          }
+        })
+      ]);
+    }
+    
+    // Atualizar o envio
+    const updatedShipping = await prisma.shipping.update({
+      where: { id: data.id },
+      data: {
+        name: data.name,
+        status: data.status,
+        carrier: data.carrier,
+        estimatedDelivery: data.estimatedDelivery,
+        stockId: data.stockId,
+        productId: data.productId
+        // Não atualizamos companyId para evitar alteração entre empresas
+      }
+    });
+    
+    console.log(`[2025-03-14 16:35:26] @sebastianascimento - Envio atualizado: ${updatedShipping.id}`);
+    
+    revalidatePath("/list/shippings");
+    revalidatePath("/list/stocks");
+    
+    return {
+      success: true,
+      error: false,
+      message: "Envio atualizado com sucesso"
+    };
+  } catch (error) {
+    console.error("[2025-03-14 16:35:26] @sebastianascimento - Erro ao atualizar envio:", error);
+    
+    return {
+      success: false,
+      error: true,
+      message: error instanceof Error ? error.message : "Erro ao atualizar envio"
+    };
+  }
+}
 
 export async function createStock(
   currentState: { success: boolean; error: boolean },
   data: StockSchema
 ): Promise<{ success: boolean; error: boolean; message?: string }> {
   try {
-    await prisma.stock.create({
-      data: {
-        product: { connect: { id: data.productId } },
-        stockLevel: data.stockLevel,
-        supplier: { connect: { id: data.supplierId } },
-      },
+    // MULTI-TENANT: Obter ID da empresa do usuário
+    const companyId = await getServerSession(authOptions)
+      .then(session => session?.user?.companyId || null);
+    
+    console.log(`[2025-03-14 16:20:09] @sebastianascimento - Criando estoque, companyId: ${companyId}`);
+    
+    // Verificar se o produto existe (mas sem verificar empresa durante a transição)
+    const product = await prisma.product.findUnique({
+      where: { id: data.productId }
     });
+    
+    if (!product) {
+      return {
+        success: false,
+        error: true,
+        message: "Produto não encontrado"
+      };
+    }
+    
+    // Verificar se o fornecedor existe (mas sem verificar empresa durante a transição)
+    const supplier = await prisma.supplier.findUnique({
+      where: { id: data.supplierId }
+    });
+    
+    if (!supplier) {
+      return {
+        success: false,
+        error: true,
+        message: "Fornecedor não encontrado"
+      };
+    }
+    
+    // Verificar se o fornecedor não tem empresa e atribuí-lo à empresa atual
+    if (supplier && companyId && !supplier.companyId) {
+      console.log(`[2025-03-14 16:20:09] @sebastianascimento - Associando fornecedor ${supplier.id} à empresa ${companyId}`);
+      
+      // Atualizar o fornecedor para pertencer à empresa do usuário
+      await prisma.supplier.update({
+        where: { id: supplier.id },
+        data: { companyId }
+      });
+    }
+
+    // Criar estoque COM companyId (se disponível)
+    const stockData: any = {
+      productId: data.productId,
+      stockLevel: data.stockLevel,
+      supplierId: data.supplierId
+    };
+    
+    // Adicionar companyId apenas se estiver disponível
+    if (companyId) {
+      stockData.companyId = companyId;
+    }
+    
+    await prisma.stock.create({ data: stockData });
+    
+    revalidatePath("/list/products");
+    revalidatePath("/logistics");
     
     return {
       success: true,
       error: false,
-      message: "Stock created successfully"
+      message: "Estoque criado com sucesso"
     };
   } catch (error) {
-    console.error("Error creating stock:", error);
+    console.error("[2025-03-14 16:20:09] @sebastianascimento - Erro ao criar estoque:", error);
     return {
       success: false,
       error: true,
-      message: "Failed to create stock record."
+      message: "Falha ao criar registro de estoque: " + (error instanceof Error ? error.message : String(error))
     };
   }
 }
+
 
 export async function updateStock(
   currentState: { success: boolean; error: boolean },
@@ -658,173 +1204,237 @@ export async function updateStock(
     return {
       ...currentState,
       error: true,
-      message: "Missing stock ID"
+      message: "ID do estoque não fornecido"
     };
   }
   
   try {
+    // MULTI-TENANT: Obter ID da empresa do usuário
+    const companyId = await getCompanyId();
+    
+    if (!companyId) {
+      return {
+        success: false,
+        error: true,
+        message: "Empresa não configurada. Configure sua empresa antes de continuar."
+      };
+    }
+    
+    console.log(`[2025-03-14 16:17:13] @sebastianascimento - Atualizando estoque ${data.id} para empresa ${companyId}`);
+    
+    // MULTI-TENANT: Verificar se o registro de estoque pertence à empresa do usuário
+    const existingStock = await prisma.stock.findFirst({
+      where: {
+        id: data.id,
+        companyId
+      }
+    });
+    
+    if (!existingStock) {
+      return {
+        success: false,
+        error: true,
+        message: "Registro de estoque não encontrado ou não pertence à sua empresa"
+      };
+    }
+    
+    // MULTI-TENANT: Verificar se o produto pertence à empresa do usuário
+    const product = await prisma.product.findFirst({
+      where: {
+        id: data.productId,
+        companyId
+      }
+    });
+    
+    if (!product) {
+      return {
+        success: false,
+        error: true,
+        message: "Produto não encontrado ou não pertence à sua empresa"
+      };
+    }
+    
+    // MULTI-TENANT: Verificar se o fornecedor pertence à empresa do usuário
+    const supplier = await prisma.supplier.findFirst({
+      where: {
+        id: data.supplierId,
+        companyId
+      }
+    });
+    
+    if (!supplier) {
+      return {
+        success: false,
+        error: true,
+        message: "Fornecedor não encontrado ou não pertence à sua empresa"
+      };
+    }
+    
+    // Atualizar estoque (companyId não é alterado para evitar transferência entre empresas)
     await prisma.stock.update({
       where: { id: data.id },
       data: {
-        product: { connect: { id: data.productId } },
+        productId: data.productId,
         stockLevel: data.stockLevel,
-        supplier: { connect: { id: data.supplierId } },
+        supplierId: data.supplierId
       },
     });
+    
+    revalidatePath("/list/products");
+    revalidatePath("/logistics");
     
     return {
       success: true,
       error: false,
-      message: "Stock updated successfully"
+      message: "Estoque atualizado com sucesso"
     };
   } catch (error) {
-    console.error("Error updating stock:", error);
+    console.error("[2025-03-14 16:17:13] @sebastianascimento - Erro ao atualizar estoque:", error);
     return {
       success: false,
       error: true,
-      message: "Failed to update stock record."
+      message: "Falha ao atualizar registro de estoque."
     };
   }
 }
 
-export const createShipping = async (
-  currentState: CurrentState,
-  data: ShippingSchema
-) => {
-  const currentDate = "2025-03-11 15:00:11";
-  const currentUser = "sebastianascimento";
-  console.log(`[${currentDate}] ${currentUser} is creating shipping: ${data.name}`);
-
-  try {
-    // Validar dados básicos
-    if (!data.name || !data.carrier || !data.stockId || !data.productId) {
-      throw new Error("Missing required shipping information");
-    }
-
-    // Garantir que temos uma data de entrega estimada válida
-    const estimatedDelivery = data.estimatedDelivery || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    // Criar o envio com os campos necessários (sem employees)
-    const shipping = await prisma.shipping.create({
-      data: {
-        name: data.name,
-        status: data.status,
-        carrier: data.carrier,
-        estimatedDelivery: estimatedDelivery, // Agora garantimos que é uma data válida
-        stockId: data.stockId,
-        productId: data.productId
-      }
-    });
-    
-    revalidatePath("/list/shippings");
-    currentState.success = true;
-    currentState.error = false;
-    currentState.message = "Shipping created successfully";
-    
-    return shipping.id;
-  } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
-    currentState.message = err instanceof Error ? err.message : "Failed to create shipping";
-    return null;
+export async function deleteStock(
+  currentState: { success: boolean; error: boolean },
+  data: FormData
+): Promise<{ success: boolean; error: boolean; message?: string }> {
+  const id = data.get('id');
+  
+  if (!id) {
+    return {
+      ...currentState,
+      error: true,
+      message: "ID do estoque não fornecido"
+    };
   }
-};
-
-// Função simplificada para atualizar um envio
-export const updateShipping = async (
-  currentState: CurrentState,
-  data: ShippingSchema
-) => {
-  const currentDate = "2025-03-11 15:00:11";
-  const currentUser = "sebastianascimento";
-  console.log(`[${currentDate}] ${currentUser} is updating shipping ID: ${data.id}`);
-
-  if (!data.id) {
-    currentState.success = false;
-    currentState.error = true;
-    currentState.message = "Missing shipping ID";
-    return;
+  
+  const stockId = Number(id);
+  
+  if (isNaN(stockId)) {
+    return {
+      ...currentState,
+      error: true,
+      message: "ID do estoque inválido"
+    };
   }
   
   try {
-    // Verificar se o envio existe
-    const shipping = await prisma.shipping.findUnique({
-      where: { id: data.id }
-    });
+    // MULTI-TENANT: Obter ID da empresa do usuário
+    const companyId = await getCompanyId();
     
-    if (!shipping) {
-      throw new Error("Shipping not found");
+    if (!companyId) {
+      return {
+        success: false,
+        error: true,
+        message: "Empresa não configurada"
+      };
     }
     
-    // Garantir que temos uma data de entrega estimada válida
-    const estimatedDelivery = data.estimatedDelivery || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    console.log(`[2025-03-14 16:17:13] @sebastianascimento - Excluindo estoque ${stockId} para empresa ${companyId}`);
     
-    // Atualizar dados básicos do envio (sem tratar employees)
-    await prisma.shipping.update({
-      where: { id: data.id },
-      data: {
-        name: data.name,
-        status: data.status,
-        carrier: data.carrier,
-        estimatedDelivery: estimatedDelivery, // Agora garantimos que é uma data válida
-        stockId: data.stockId,
-        productId: data.productId
+    // MULTI-TENANT: Verificar se o registro de estoque pertence à empresa do usuário
+    const existingStock = await prisma.stock.findFirst({
+      where: {
+        id: stockId,
+        companyId
       }
     });
     
-    revalidatePath("/list/shippings");
-    currentState.success = true;
-    currentState.error = false;
-    currentState.message = "Shipping updated successfully";
-  } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
-    currentState.message = err instanceof Error ? err.message : "Failed to update shipping";
-  }
-};
-
-// Função de exclusão permanece a mesma
-export const deleteShipping = async (
-  currentState: CurrentState,
-  formData: FormData
-) => {
-  const currentDate = "2025-03-11 15:00:11";
-  const currentUser = "sebastianascimento";
-  const shippingId = Number(formData.get("id"));
-  console.log(`[${currentDate}] ${currentUser} is deleting shipping ID: ${shippingId}`);
-
-  if (isNaN(shippingId)) {
-    currentState.success = false;
-    currentState.error = true;
-    currentState.message = "Invalid shipping ID";
-    return;
-  }
-  
-  try {
-    // Verificar se o envio existe
-    const shipping = await prisma.shipping.findUnique({
-      where: { id: shippingId }
-    });
-    
-    if (!shipping) {
-      throw new Error("Shipping not found");
+    if (!existingStock) {
+      return {
+        success: false,
+        error: true,
+        message: "Registro de estoque não encontrado ou não pertence à sua empresa"
+      };
     }
     
-    // Excluir o envio
-    await prisma.shipping.delete({
-      where: { id: shippingId }
+    // Excluir o registro
+    await prisma.stock.delete({
+      where: { id: stockId }
     });
     
-    revalidatePath("/list/shippings");
-    currentState.success = true;
-    currentState.error = false;
-    currentState.message = "Shipping deleted successfully";
-  } catch (err) {
-    console.log(err);
-    currentState.success = false;
-    currentState.error = true;
-    currentState.message = err instanceof Error ? err.message : "Failed to delete shipping";
+    revalidatePath("/list/products");
+    revalidatePath("/logistics");
+    
+    return {
+      success: true,
+      error: false,
+      message: "Registro de estoque excluído com sucesso"
+    };
+  } catch (error) {
+    console.error("[2025-03-14 16:17:13] @sebastianascimento - Erro ao excluir estoque:", error);
+    
+    // Verificar se há erros específicos do Prisma
+    if (typeof error === 'object' && error !== null) {
+      // @ts-ignore
+      const prismaError = error.code;
+      // Se houver registros relacionados que impedem a exclusão
+      if (prismaError === 'P2003') {
+        return {
+          success: false,
+          error: true,
+          message: "Este registro de estoque está sendo usado por outros registros e não pode ser excluído"
+        };
+      }
+    }
+    
+    return {
+      success: false,
+      error: true,
+      message: "Falha ao excluir registro de estoque"
+    };
   }
-};
+}
+
+async function listEntityByCompany(
+  model: any, 
+  options: { 
+    orderBy?: Record<string, string>, 
+    include?: Record<string, boolean>,
+    where?: Record<string, any>
+  } = {}
+) {
+  try {
+    const companyId = await getCompanyId();
+    
+    const entities = await model.findMany({
+      where: { 
+        ...options.where,
+        companyId 
+      },
+      orderBy: options.orderBy || { name: 'asc' },
+      include: options.include
+    });
+    
+    return { success: true, data: entities };
+  } catch (error) {
+    return {
+      success: false,
+      error: true,
+      message: `Erro ao listar entidades: ${error instanceof Error ? error.message : "erro desconhecido"}`,
+      data: []
+    };
+  }
+}
+
+// Implementações simplificadas das funções de listagem
+export async function listCategories() {
+  return listEntityByCompany(prisma.category);
+}
+
+export async function listBrands() {
+  return listEntityByCompany(prisma.brand);
+}
+
+export async function listSuppliers() {
+  return listEntityByCompany(prisma.supplier);
+}
+
+export async function listCustomers() {
+  return listEntityByCompany(prisma.customer);
+}
+

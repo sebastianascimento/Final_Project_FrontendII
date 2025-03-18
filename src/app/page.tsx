@@ -1,15 +1,9 @@
-import Header from "./components/landingpage/Header";
-import Hero from "./components/landingpage/Hero";
-import Features from "./components/landingpage/Features";
-import Footer from "./components/landingpage/Footer";
+
+import { metadata } from './metadata'; 
+import HomeClient from './HomeClient';
+
+export { metadata };
 
 export default function Home() {
-  return (
-    <div className="bg-white text-black">
-      <Header />
-        <Hero />
-        <Features />
-      <Footer />
-    </div>
-  );
+  return <HomeClient />;
 }

@@ -1,6 +1,0 @@
-{
-  "databaseURL": "https://BizzControl-s6rnic.eu-central-1.xata.sh/db/BizzControl",
-  "codegen": {
-    "output": "src/xata.ts"
-  }
-}

@@ -3,10 +3,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import InputField from "../InputField";
 import { orderSchema } from "@/app/lib/formValidationSchemas";
 import { createOrder, updateOrder } from "@/app/lib/actions";
+import { Loader, AlertCircle, CheckCircle } from "lucide-react";
 
 type OrderInputs = z.infer<typeof orderSchema>;
 
@@ -15,11 +17,19 @@ interface Product {
   id: number;
   name: string;
   price?: number;
+  companyId: string;
 }
 
 interface Customer {
   id: number;
   name: string;
+  companyId: string;
+}
+
+interface FormState {
+  success: boolean;
+  error: boolean;
+  errorMessage: string;
 }
 
 const OrderForm = ({
@@ -31,22 +41,32 @@ const OrderForm = ({
   data?: any;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
+  // MULTI-TENANT: Obter sessão para acessar o companyId
+  const { data: session } = useSession();
+  const companyId = session?.user?.companyId;
+  
+  // Estado para controle do formulário
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formState, setFormState] = useState({ 
+  const [formState, setFormState] = useState<FormState>({ 
     success: false, 
     error: false,
     errorMessage: ""
   });
-  const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [productExists, setProductExists] = useState<boolean | null>(null);
-  const [customerExists, setCustomerExists] = useState<boolean | null>(null);
-  const [productInput, setProductInput] = useState("");
-  const [customerInput, setCustomerInput] = useState("");
-  const [totalAmount, setTotalAmount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiData, setApiData] = useState<{
+    products: Product[];
+    customers: Customer[];
+    isLoaded: boolean;
+  }>({
+    products: [],
+    customers: [],
+    isLoaded: false
+  });
+  
+  // Estado para as entradas e seleções
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
+  const [currentDate] = useState<string>("2025-03-17 20:08:14");
+  const [currentUser] = useState<string>("sebastianascimento");
 
   const {
     register,
@@ -54,443 +74,432 @@ const OrderForm = ({
     reset,
     watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<OrderInputs>({
     resolver: zodResolver(orderSchema),
   });
   
-  // Observar as mudanças na quantidade e no produto
+  // Valores observados do formulário
   const quantity = watch("quantity");
   const productName = watch("product");
   const customerName = watch("customer");
+  
+  // Cálculo do valor total
+  const totalAmount = useMemo(() => {
+    if (selectedProduct?.price && quantity) {
+      return selectedProduct.price * Number(quantity);
+    }
+    return 0;
+  }, [selectedProduct, quantity]);
 
-  // Buscar produtos e clientes quando o componente é montado
+  // Busca de produtos e clientes específicos da empresa (MULTI-TENANT)
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchCompanyData = async () => {
+      if (!companyId) {
+        console.log(`[${currentDate}] @${currentUser} - CompanyId não disponível, aguardando sessão...`);
+        return;
+      }
+
+      setIsLoading(true);
+      console.log(`[${currentDate}] @${currentUser} - Buscando dados da empresa ${companyId}`);
+
       try {
-        // Buscar produtos
-        const productsResponse = await fetch('/api/products');
-        if (productsResponse.ok) {
-          const productsData = await productsResponse.json();
-          setProducts(productsData);
-          console.log("Produtos carregados:", productsData);
-        } else {
-          console.error("Erro ao buscar produtos:", await productsResponse.text());
+        // MULTI-TENANT: Adicionar companyId como parâmetro nas requisições
+        const [productsResponse, customersResponse] = await Promise.all([
+          fetch(`/api/products?companyId=${companyId}`),
+          fetch(`/api/customers?companyId=${companyId}`)
+        ]);
+
+        if (!productsResponse.ok || !customersResponse.ok) {
+          throw new Error("Falha ao buscar dados da empresa");
         }
+
+        const products = await productsResponse.json();
+        const customers = await customersResponse.json();
         
-        // Buscar clientes
-        const customersResponse = await fetch('/api/customers');
-        if (customersResponse.ok) {
-          const customersData = await customersResponse.json();
-          setCustomers(customersData);
-        } else {
-          console.error("Erro ao buscar clientes:", await customersResponse.text());
-        }
+        console.log(`[${currentDate}] @${currentUser} - Dados carregados: ${products.length} produtos, ${customers.length} clientes`);
+        
+        setApiData({
+          products,
+          customers,
+          isLoaded: true
+        });
       } catch (error) {
-        console.error("Failed to fetch data:", error);
+        console.error(`[${currentDate}] @${currentUser} - Erro ao carregar dados:`, error);
+        setFormState({
+          success: false,
+          error: true,
+          errorMessage: "Falha ao carregar produtos e clientes. Por favor, tente novamente."
+        });
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
-    
-    fetchData();
-  }, []);
 
-  // Verificar se o produto existe com comparação melhorada
+    fetchCompanyData();
+  }, [companyId, currentDate, currentUser]);
+
+  // Validação e seleção de produto quando o nome muda
   useEffect(() => {
-    if (!productName || !products.length) {
-      setProductExists(null);
-      setSelectedProduct(null);
-      setTotalAmount(0);
-      return;
-    }
+    if (!productName || !apiData.isLoaded) return;
 
-    // Preparar o nome do produto para comparação
     const normalizedInput = productName.toLowerCase().trim();
     
-    // Listar todos os produtos para depuração
-    const productNames = products.map(p => p.name.toLowerCase().trim());
-    setDebugInfo(`Procurando: "${normalizedInput}" em [${productNames.join(", ")}]`);
-
-    // Localizar produto com comparação melhorada
-    const product = products.find(p => 
+    // Buscar produto correspondente
+    const product = apiData.products.find(p => 
       p.name.toLowerCase().trim() === normalizedInput
+    ) || apiData.products.find(p => 
+      p.name.toLowerCase().trim().includes(normalizedInput)
     );
-    
-    // Se ainda não encontrar, tente uma busca por substring
-    if (!product && products.length > 0) {
-      const similarProduct = products.find(p => 
-        p.name.toLowerCase().trim().includes(normalizedInput) || 
-        normalizedInput.includes(p.name.toLowerCase().trim())
-      );
-      
-      if (similarProduct) {
-        setProductExists(true);
-        setSelectedProduct(similarProduct);
-        // Atualizar o campo para o nome exato do produto
-        setValue("product", similarProduct.name);
-        setProductInput(similarProduct.name);
-        
-        if (similarProduct.price && quantity) {
-          setTotalAmount(similarProduct.price * Number(quantity));
-        }
-        return;
-      }
-    }
-    
-    setProductExists(!!product);
+
     setSelectedProduct(product || null);
     
-    if (product && product.price && quantity) {
-      setTotalAmount(product.price * Number(quantity));
-    } else {
-      setTotalAmount(0);
+    // Se encontrar um produto por correspondência parcial, atualizar o input
+    if (product && product.name.toLowerCase().trim() !== normalizedInput) {
+      setValue("product", product.name);
     }
-  }, [productName, products, quantity, setValue]);
+  }, [productName, apiData.products, apiData.isLoaded, setValue]);
 
-  // Verificar se o cliente existe com comparação melhorada
+  // Carregar dados iniciais para edição
   useEffect(() => {
-    if (!customerName) {
-      setCustomerExists(null);
-      return;
-    }
-
-    const normalizedInput = customerName.toLowerCase().trim();
-    
-    const customer = customers.find(c => 
-      c.name.toLowerCase().trim() === normalizedInput
-    );
-    
-    // Se ainda não encontrar, tente uma busca por substring
-    if (!customer && customers.length > 0) {
-      const similarCustomer = customers.find(c => 
-        c.name.toLowerCase().trim().includes(normalizedInput) || 
-        normalizedInput.includes(c.name.toLowerCase().trim())
-      );
+    if (type === "update" && data && apiData.isLoaded) {
+      console.log(`[${currentDate}] @${currentUser} - Configurando formulário para atualização do pedido ${data.id}`);
       
-      if (similarCustomer) {
-        setCustomerExists(true);
-        setValue("customer", similarCustomer.name);
-        setCustomerInput(similarCustomer.name);
-        return;
-      }
-    }
-    
-    setCustomerExists(!!customer);
-  }, [customerName, customers, setValue]);
+      // Encontrar o produto e cliente nos dados carregados
+      const productMatch = apiData.products.find(p => p.id === data.productId);
+      const customerMatch = apiData.customers.find(c => c.id === data.customerId);
 
-  // Carregar os dados do pedido quando for update
-  useEffect(() => {
-    if (type === "update" && data) {
-      console.log("Setting form data for update:", data);
       reset({
         id: data.id,
-        product: data.product?.name || "",
-        customer: data.customer?.name || "",
+        product: productMatch?.name || data.product?.name || "",
+        customer: customerMatch?.name || data.customer?.name || "",
         address: data.address || "",
         quantity: data.quantity,
         status: data.status,
       });
-      
-      setProductInput(data.product?.name || "");
-      setCustomerInput(data.customer?.name || "");
-      
-      if (data.product?.price && data.quantity) {
-        setTotalAmount(data.product.price * data.quantity);
+
+      // Atualizar o produto selecionado para cálculo de valor
+      if (productMatch) {
+        setSelectedProduct(productMatch);
       }
     }
-  }, [data, reset, type]);
+  }, [data, reset, type, apiData.isLoaded, apiData.products, apiData.customers, currentDate, currentUser]);
 
-  // Efeitos para sincronizar os inputs com os valores do form
-  useEffect(() => {
-    if (productName) setProductInput(productName);
-  }, [productName]);
-  
-  useEffect(() => {
-    if (customerName) setCustomerInput(customerName);
-  }, [customerName]);
-
+  // Handler de envio do formulário
   const onSubmit = handleSubmit(async (formData) => {
+    if (!companyId) {
+      setFormState({ 
+        success: false, 
+        error: true,
+        errorMessage: "ID da empresa não disponível. Por favor, faça login novamente."
+      });
+      return;
+    }
+
     setIsSubmitting(true);
-    setFormState({ success: false, error: false, errorMessage: "" });
-    
-    // Verificar se o produto existe antes de submeter
-    if (!productExists && type === "create") {
-      setFormState({ 
-        success: false, 
-        error: true,
-        errorMessage: `Product "${formData.product}" does not exist. Please add it to the products list first.`
-      });
-      setIsSubmitting(false);
-      return;
-    }
-    
-    // Verificar se o cliente existe antes de submeter
-    if (!customerExists && type === "create") {
-      setFormState({ 
-        success: false, 
-        error: true,
-        errorMessage: `Customer "${formData.customer}" does not exist. Please add the customer first.`
-      });
-      setIsSubmitting(false);
-      return;
-    }
-    
-    console.log(`Form type: ${type}`);
-    console.log("Form data:", formData);
-    
+    console.log(`[${currentDate}] @${currentUser} - Enviando formulário de ${type === "create" ? "criação" : "atualização"} de pedido`);
+
     try {
-      // Adicionar o ID do produto e do cliente aos dados do formulário
-      const product = products.find(p => 
+      // Encontrar IDs de produto e cliente baseado nos nomes
+      const product = apiData.products.find(p => 
         p.name.toLowerCase().trim() === formData.product.toLowerCase().trim()
       );
-      const customer = customers.find(c => 
+      
+      const customer = apiData.customers.find(c => 
         c.name.toLowerCase().trim() === formData.customer.toLowerCase().trim()
       );
-      
+
+      // Validar se produto e cliente existem
+      if (!product || !customer) {
+        const errorMessage = !product 
+          ? `Produto "${formData.product}" não encontrado na sua empresa.` 
+          : `Cliente "${formData.customer}" não encontrado na sua empresa.`;
+          
+        setFormState({ success: false, error: true, errorMessage });
+        return;
+      }
+
+      // MULTI-TENANT: Adicionar companyId aos dados de envio
       const submissionData = {
         ...formData,
-        productId: product?.id,
-        customerId: customer?.id,
-        totalAmount: totalAmount
+        productId: product.id,
+        customerId: customer.id,
+        totalAmount: totalAmount,
+        companyId // Incluir companyId nos dados do pedido
       };
       
-      console.log("Submission data:", submissionData);
+      console.log(`[${currentDate}] @${currentUser} - Dados para envio:`, {
+        operationType: type,
+        orderId: formData.id || 'novo',
+        productId: product.id,
+        customerId: customer.id,
+        companyId
+      });
       
-      let result;
+      // Chamar a função apropriada baseada no tipo
+      const result = type === "create"
+        ? await createOrder({ success: false, error: false }, submissionData)
+        : await updateOrder({ success: false, error: false }, submissionData);
       
-      if (type === "create") {
-        result = await createOrder({ success: false, error: false }, submissionData);
-      } else {
-        // Para atualização, certifique-se que o ID está presente
-        if (!formData.id) {
-          console.error("Missing ID for update operation!");
-          setFormState({ success: false, error: true, errorMessage: "Order ID is missing" });
-          return;
-        }
-        
-        console.log(`Updating order with ID: ${formData.id}`);
-        result = await updateOrder({ success: false, error: false }, submissionData);
-      }
-      
-      setFormState({ success: true, error: false, errorMessage: "" });
-      
-      // Se for bem-sucedido, fechar o modal após um pequeno atraso
+      // Processar o resultado
       if (result?.success) {
+        console.log(`[${currentDate}] @${currentUser} - Pedido ${type === "create" ? "criado" : "atualizado"} com sucesso`);
+        setFormState({ 
+          success: true, 
+          error: false, 
+          errorMessage: "" 
+        });
+        
+        // Fechar o modal após um breve delay
         setTimeout(() => {
           setOpen(false);
+          // Recarregar página para mostrar alterações
           window.location.reload();
         }, 1500);
+      } else {
       }
     } catch (error) {
-      console.error("Error in form submission:", error);
-      setFormState({ success: false, error: true, errorMessage: "An error occurred during submission" });
+      console.error(`[${currentDate}] @${currentUser} - Erro ao processar formulário:`, error);
+      setFormState({
+        success: false,
+        error: true,
+        errorMessage: "Erro ao processar seu pedido. Por favor, tente novamente."
+      });
     } finally {
       setIsSubmitting(false);
     }
   });
 
-  // Manipuladores para campos de texto com sugestão
-  const handleProductChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setProductInput(value);
-    setValue("product", value);
-  };
-  
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setCustomerInput(value);
-    setValue("customer", value);
-  };
-
-  // Função para forçar a pesquisa do produto
-  const handleForceProductSelection = () => {
-    const product = products.find(p => p.name.toLowerCase().includes(productInput.toLowerCase()));
-    if (product) {
-      setValue("product", product.name);
-      setProductInput(product.name);
-      setProductExists(true);
-      setSelectedProduct(product);
-      if (product.price && quantity) {
-        setTotalAmount(product.price * Number(quantity));
-      }
-    }
-  };
+  // Verificações de erros críticos
+  if (!companyId) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+        <div className="flex items-center gap-2 text-red-600 mb-2">
+          <AlertCircle size={20} />
+          <h2 className="font-semibold">Erro de Acesso</h2>
+        </div>
+        <p className="text-sm text-red-700">
+          Você precisa estar autenticado e associado a uma empresa para gerenciar pedidos.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <form className="flex flex-col gap-8" onSubmit={onSubmit}>
-      <h1 className="text-xl font-semibold">
-        {type === "create" ? "Create a new order" : "Update order"}
+    <form className="flex flex-col gap-6" onSubmit={onSubmit}>
+      <h1 className="text-xl font-semibold flex items-center gap-2">
+        {type === "create" ? "Criar novo pedido" : "Atualizar pedido"}
+        {isLoading && <Loader className="h-4 w-4 animate-spin ml-2" />}
       </h1>
 
+      {/* Mensagens de status do formulário */}
       {formState.success && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-          Order {type === "create" ? "created" : "updated"} successfully!
+        <div className="bg-green-50 text-green-800 border border-green-200 rounded-md p-3 flex items-start gap-2">
+          <CheckCircle className="h-5 w-5 text-green-500 mt-0.5" />
+          <div>
+            <p className="font-medium">Operação concluída</p>
+            <p className="text-sm">Pedido {type === "create" ? "criado" : "atualizado"} com sucesso!</p>
+          </div>
         </div>
       )}
       
       {formState.error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {formState.errorMessage || "An error occurred. Please try again."}
+        <div className="bg-red-50 text-red-800 border border-red-200 rounded-md p-3 flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+          <div>
+            <p className="font-medium">Erro na operação</p>
+            <p className="text-sm">{formState.errorMessage || "Ocorreu um erro ao processar sua solicitação."}</p>
+          </div>
         </div>
       )}
       
       {/* Campo oculto para o ID (necessário para atualização) */}
       {type === "update" && <input type="hidden" {...register("id")} />}
 
-      <div className="flex justify-between flex-wrap gap-4">
-        {/* Campo de produto com validação e autocompletar - CORRIGIDO */}
-        <div className="flex flex-col w-full sm:w-[48%] gap-2">
-          <label htmlFor="product" className="text-gray-700">Product Name</label>
-          <div className="flex gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Campo de produto com lista de sugestões */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="product" className="text-gray-700 font-medium text-sm">
+            Produto <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
             <input
               id="product"
-              className={`border ${
-                productExists === true ? 'border-green-500' : 
-                productExists === false ? 'border-red-500' : 
+              className={`w-full border ${
+                errors?.product ? 'border-red-500' : 
+                selectedProduct ? 'border-green-500' : 
                 'border-gray-300'
-              } p-2 rounded-md flex-1`}
-              value={productInput}
-              onChange={(e) => handleProductChange(e)}
+              } p-2 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500`}
+              {...register("product")}
               list="product-options"
-              name="product"
-              ref={register("product").ref}
-              onBlur={register("product").onBlur}
-              placeholder="Select product"
+              placeholder="Selecione ou digite o nome do produto"
+              disabled={isLoading}
             />
-            <button
-              type="button"
-              className="bg-blue-500 text-white px-3 rounded-md"
-              onClick={handleForceProductSelection}
-            >
-              Find
-            </button>
+            <datalist id="product-options">
+              {apiData.products.map((product) => (
+                <option key={product.id} value={product.name} />
+              ))}
+            </datalist>
           </div>
-          <datalist id="product-options">
-            {products.map((product) => (
-              <option key={product.id} value={product.name} />
-            ))}
-          </datalist>
+          
           {errors?.product && (
-            <span className="text-red-500 text-sm">{errors.product.message as string}</span>
+            <span className="text-red-500 text-xs">{errors.product.message as string}</span>
           )}
-          {productExists === false && (
-            <div>
-              <span className="text-red-500 text-sm">
-                This product doesn't exist in the system. Please add it first.
-              </span>
-              <details className="text-xs text-gray-500 mt-1">
-                <summary>Debug info</summary>
-                <p>{debugInfo}</p>
-                <p>Available products: {products.length}</p>
-                <ul className="ml-4 list-disc">
-                  {products.slice(0, 10).map((p, i) => (
-                    <li key={i}>{p.name} (ID: {p.id})</li>
-                  ))}
-                  {products.length > 10 && <li>...and {products.length - 10} more</li>}
-                </ul>
-              </details>
+          
+          {selectedProduct && (
+            <div className="text-xs text-green-600 flex flex-col">
+              <span>Produto encontrado (ID: {selectedProduct.id})</span>
+              <span>Preço unitário: ${selectedProduct.price?.toFixed(2)}</span>
             </div>
           )}
-          {selectedProduct && productExists && (
-            <span className="text-green-600 text-sm">
-              Price: ${selectedProduct.price?.toFixed(2)}
+          
+          {productName && !selectedProduct && !isLoading && apiData.isLoaded && (
+            <span className="text-yellow-600 text-xs">
+              Produto não encontrado. Verifique o nome ou adicione um novo produto.
             </span>
           )}
         </div>
         
-        {/* Campo de cliente com validação e autocompletar - CORRIGIDO */}
-        <div className="flex flex-col w-full sm:w-[48%] gap-2">
-          <label htmlFor="customer" className="text-gray-700">Customer Name</label>
+        {/* Campo de cliente com lista de sugestões */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="customer" className="text-gray-700 font-medium text-sm">
+            Cliente <span className="text-red-500">*</span>
+          </label>
           <input
             id="customer"
-            className={`border ${
-              customerExists === true ? 'border-green-500' : 
-              customerExists === false ? 'border-red-500' : 
-              'border-gray-300'
-            } p-2 rounded-md`}
-            value={customerInput}
-            onChange={(e) => handleCustomerChange(e)}
+            className={`w-full border ${
+              errors?.customer ? 'border-red-500' : 
+              customerName && apiData.customers.some(c => c.name.toLowerCase() === customerName.toLowerCase()) 
+                ? 'border-green-500' : 
+                'border-gray-300'
+            } p-2 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500`}
+            {...register("customer")}
             list="customer-options"
-            name="customer"
-            ref={register("customer").ref}
-            onBlur={register("customer").onBlur}
-            placeholder="Select customer"
+            placeholder="Selecione ou digite o nome do cliente"
+            disabled={isLoading}
           />
           <datalist id="customer-options">
-            {customers.map((customer) => (
+            {apiData.customers.map((customer) => (
               <option key={customer.id} value={customer.name} />
             ))}
           </datalist>
+          
           {errors?.customer && (
-            <span className="text-red-500 text-sm">{errors.customer.message as string}</span>
+            <span className="text-red-500 text-xs">{errors.customer.message as string}</span>
           )}
-          {customerExists === false && (
-            <span className="text-red-500 text-sm">
-              This customer doesn't exist in the system. Please add them first.
+          
+          {customerName && !apiData.customers.some(c => c.name.toLowerCase() === customerName.toLowerCase()) && 
+           !isLoading && apiData.isLoaded && (
+            <span className="text-yellow-600 text-xs">
+              Cliente não encontrado. Verifique o nome ou adicione um novo cliente.
             </span>
           )}
         </div>
         
+        {/* Campo de endereço */}
         <InputField
-          label="Shipping Address"
+          label="Endereço de Entrega"
           name="address"
           register={register}
           error={errors?.address}
         />
         
-        <InputField
-          label="Quantity"
-          name="quantity"
-          type="number"
-          register={register}
-          error={errors?.quantity}
-        />
-        
-        {/* Campo de Total Amount (somente leitura) */}
-        <div className="flex flex-col w-full sm:w-[48%] gap-2">
-          <label htmlFor="totalAmount" className="text-gray-700">Total Amount</label>
-          <input 
-            id="totalAmount"
-            type="text"
-            className="border border-gray-300 p-2 rounded-md bg-gray-100"
-            value={`$${totalAmount.toFixed(2)}`}
-            readOnly
+        {/* Campo de quantidade */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="quantity" className="text-gray-700 font-medium text-sm">
+            Quantidade <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="quantity"
+            type="number"
+            min="1"
+            className={`border ${errors?.quantity ? 'border-red-500' : 'border-gray-300'} 
+                      p-2 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500`}
+            {...register("quantity")}
+            disabled={isLoading}
           />
-          <p className="text-xs text-gray-500">
-            This value is calculated automatically based on product price and quantity
-          </p>
+          {errors?.quantity && (
+            <span className="text-red-500 text-xs">{errors.quantity.message as string}</span>
+          )}
         </div>
         
-        <div className="flex flex-col w-full sm:w-[48%] gap-2">
-          <label htmlFor="status" className="text-gray-700">Order Status</label>
+        {/* Status do pedido */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="status" className="text-gray-700 font-medium text-sm">
+            Status do Pedido
+          </label>
           <select 
             id="status" 
-            className="border border-gray-300 p-2 rounded-md"
+            className="border border-gray-300 p-2 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
             {...register("status")}
+            disabled={isLoading}
           >
-            <option value="PENDING">PENDING</option>
-            <option value="SHIPPED">SHIPPED</option>
-            <option value="DELIVERED">DELIVERED</option>
-            <option value="CANCELLED">CANCELLED</option>
+            <option value="PENDING">PENDENTE</option>
+            <option value="PROCESSING">EM PROCESSAMENTO</option>
+            <option value="SHIPPED">ENVIADO</option>
+            <option value="DELIVERED">ENTREGUE</option>
+            <option value="CANCELLED">CANCELADO</option>
           </select>
           {errors?.status && (
-            <span className="text-red-500 text-sm">{errors.status.message as string}</span>
+            <span className="text-red-500 text-xs">{errors.status.message as string}</span>
           )}
+        </div>
+        
+        {/* Campo de valor total (somente leitura) */}
+        <div className="flex flex-col gap-2 col-span-1 sm:col-span-2">
+          <label className="text-gray-700 font-medium text-sm">
+            Valor Total
+          </label>
+          <div className="flex items-center">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="text-gray-500">$</span>
+              </div>
+              <input 
+                type="text"
+                className="w-full bg-gray-50 border border-gray-300 p-2 pl-7 rounded-md text-gray-700"
+                value={totalAmount.toFixed(2)}
+                readOnly
+              />
+            </div>
+            {selectedProduct && quantity ? (
+              <div className="text-xs text-gray-500 ml-2">
+                {selectedProduct.price?.toFixed(2)} × {quantity} = ${totalAmount.toFixed(2)}
+              </div>
+            ) : null}
+          </div>
+          <p className="text-xs text-gray-500">
+            Valor calculado automaticamente baseado no preço do produto e quantidade
+          </p>
         </div>
       </div>
       
-      <button 
-        className={`${isSubmitting ? 'bg-gray-400' : type === 'create' ? 'bg-blue-400' : 'bg-green-500'} text-white p-2 rounded-md`}
-        disabled={isSubmitting || loading || (productExists === false && type === "create") || (customerExists === false && type === "create")}
-        type="submit"
-      >
-        {isSubmitting ? 
-          (type === "create" ? "Creating..." : "Updating...") : 
-          (type === "create" ? "Create" : "Update")
-        }
-      </button>
+      {/* Informações da empresa (Multi-tenant) */}
+      <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mt-2">
+        <h3 className="text-sm text-blue-800 font-medium mb-1">Informações da Empresa</h3>
+        <p className="text-xs text-blue-600">
+          Este pedido será associado à sua empresa (ID: {companyId})
+        </p>
+      </div>
+      
+      {/* Botão de submissão */}
+      <div className="flex justify-end mt-4">
+        <button 
+          className={`px-4 py-2 rounded-md text-white font-medium
+                    ${isSubmitting ? 'bg-gray-400 cursor-wait' : 
+                      type === 'create' ? 'bg-blue-500 hover:bg-blue-600' : 
+                      'bg-green-500 hover:bg-green-600'} 
+                    transition-colors flex items-center gap-2`}
+          disabled={isSubmitting || isLoading || (!isDirty && type === "update")}
+          type="submit"
+        >
+          {isSubmitting && <Loader className="h-4 w-4 animate-spin" />}
+          {isSubmitting 
+            ? (type === "create" ? "Criando..." : "Atualizando...") 
+            : (type === "create" ? "Criar Pedido" : "Salvar Alterações")
+          }
+        </button>
+      </div>
     </form>
   );
 };

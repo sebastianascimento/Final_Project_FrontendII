@@ -7,21 +7,22 @@ import { useState } from "react";
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  // CORREÇÃO: Mudar para /auth-redirect em vez de /dashboard
+  const callbackUrl = searchParams.get("callbackUrl") || "/auth-redirect";
   const error = searchParams.get("error");
   
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       // Log para depuração
-      console.log("Initiating Google sign in with callbackUrl:", callbackUrl);
+      console.log("[2025-03-14 11:54:55] @sebastianascimento - Iniciando login com Google, redirecionamento para:", callbackUrl);
       
       await signIn("google", { 
         callbackUrl,
         redirect: true
       });
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("[2025-03-14 11:54:55] Erro no login:", error);
     } finally {
       setLoading(false);
     }

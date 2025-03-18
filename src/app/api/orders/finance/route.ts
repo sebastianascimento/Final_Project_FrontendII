@@ -1,5 +1,8 @@
+// [2025-03-15 10:14:29] @sebastianascimento - API de dados financeiros com suporte multi-tenant
 import { prisma } from "@/app/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 // Interface para o modelo de ordem do banco de dados
 interface OrderWithProduct {
@@ -20,15 +23,33 @@ interface FormattedOrder {
   total: number;
 }
 
-export async function GET() {
-  const currentDate = "2025-03-13 10:25:00";
+export async function GET(request: NextRequest) {
+  const currentDate = "2025-03-15 10:14:29";
   const currentUser = "sebastianascimento";
   
-  console.log(`Orders finance API called at: ${currentDate} by user: ${currentUser}`);
-
   try {
-    // Buscar todas as ordens do banco de dados
+    // MULTI-TENANT: Verificação de autenticação
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      console.log(`[${currentDate}] @${currentUser} - Tentativa de acesso não autorizado à API Finance`);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
+    // MULTI-TENANT: Obter o companyId da URL ou da sessão
+    const userCompanyId = request.nextUrl.searchParams.get("companyId") || session.user.companyId;
+    
+    if (!userCompanyId) {
+      console.log(`[${currentDate}] @${currentUser} - Requisição sem ID da empresa para API Finance`);
+      return NextResponse.json({ error: "Company ID not found" }, { status: 400 });
+    }
+    
+    console.log(`[${currentDate}] @${currentUser} - API Finance chamada para empresa: ${userCompanyId}`);
+
+    // MULTI-TENANT: Adicionar filtro de companyId
     const orders = await prisma.order.findMany({
+      where: {
+        companyId: userCompanyId // Filtrar apenas ordens da empresa do usuário
+      },
       select: {
         id: true,
         date: true,
@@ -57,9 +78,11 @@ export async function GET() {
     // Filtrar ordens sem data
     const validOrders = formattedOrders.filter((order: FormattedOrder) => order.date !== null);
 
+    console.log(`[${currentDate}] @${currentUser} - Retornando ${validOrders.length} ordens válidas para empresa ${userCompanyId}`);
+    
     return NextResponse.json(validOrders);
   } catch (error) {
-    console.error("Error fetching orders:", error);
+    console.error(`[${currentDate}] @${currentUser} - Erro ao buscar ordens:`, error);
     
     return NextResponse.json({ 
       error: "Failed to fetch order data", 
