@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { countByCompany } from "@/app/lib/multiTenant";
 
-// Tipo atualizado para incluir as versões no plural que já estão sendo usadas
 type CardType = "customers" | "products" | "orders";
 
 const UserCard = async ({
@@ -11,11 +10,8 @@ const UserCard = async ({
 }) => {
   let count = 0;
   try {
-    // Agora funciona com os tipos no plural
     count = await countByCompany(type);
-    console.log(`[2025-03-14 14:22:06] @sebastianascimento - Contagem de ${type}: ${count}`);
   } catch (error) {
-    console.error(`[2025-03-14 14:22:06] @sebastianascimento - Erro ao contar ${type}:`, error);
   }
 
   return (

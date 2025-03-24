@@ -1,58 +1,115 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useAppDispatch, useAppSelector } from "@/app/redux/hooks";
+import { setCurrentPage, selectCurrentPage } from "@/app/redux/features/searchSlice";
 import { ITEM_PER_PAGE } from "@/app/lib/setting";
 
+interface PaginationProps {
+  count: number;
+  page?: number; // Make it optional so we don't break existing usage
+}
 
-const Pagination = ({ page, count }: { page: number; count: number }) => {
+const Pagination = ({ count, page }: PaginationProps) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  
+  const dispatch = useAppDispatch();
+  const reduxCurrentPage = useAppSelector(selectCurrentPage);
+  
+  // Use the page prop if provided, otherwise use Redux state
+  const currentPage = page !== undefined ? page : reduxCurrentPage;
+  
+  const hasPrev = currentPage > 1;
+  const hasNext = currentPage * ITEM_PER_PAGE < count;
 
-  const hasPrev = ITEM_PER_PAGE * (page - 1) > 0;
-  const hasNext = ITEM_PER_PAGE * (page - 1) + ITEM_PER_PAGE < count;
+  // Calculate total pages
+  const totalPages = Math.ceil(count / ITEM_PER_PAGE);
 
-  const changePage = (newPage: number) => {
-    const params = new URLSearchParams(window.location.search);
+  useEffect(() => {
+    // If page prop is provided, sync it to Redux
+    if (page !== undefined && page !== reduxCurrentPage) {
+      dispatch(setCurrentPage(page));
+      return;
+    }
+    
+    // Otherwise sync from URL on component mount
+    const pageFromUrl = Number(searchParams.get("page")) || 1;
+    if (pageFromUrl !== reduxCurrentPage) {
+      dispatch(setCurrentPage(pageFromUrl));
+    }
+  }, [searchParams, dispatch, reduxCurrentPage, page]);
+
+  const handlePageChange = (newPage: number) => {
+    dispatch(setCurrentPage(newPage));
+    
+    const params = new URLSearchParams(searchParams.toString());
     params.set("page", newPage.toString());
-    router.push(`${window.location.pathname}?${params}`);
+    
+    router.push(`${pathname}?${params.toString()}`);
   };
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    
+    return pages;
+  };
+
+  if (count <= ITEM_PER_PAGE) return null;
+
   return (
-    <div className="p-4 flex items-center justify-between text-gray-500">
+    <div className="flex justify-between items-center mt-4 px-4">
       <button
         disabled={!hasPrev}
-        className="py-2 px-4 rounded-md bg-slate-200 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={() => {
-          changePage(page - 1);
-        }}
+        onClick={() => handlePageChange(currentPage - 1)}
+        className={`px-3 py-1 rounded ${
+          hasPrev
+            ? "bg-blue-500 text-white hover:bg-blue-600"
+            : "bg-gray-200 text-gray-500 cursor-not-allowed"
+        }`}
       >
-        Prev
+        Previous
       </button>
-      <div className="flex items-center gap-2 text-sm">
-        {Array.from(
-          { length: Math.ceil(count / ITEM_PER_PAGE) },
-          (_, index) => {
-            const pageIndex = index + 1;
-            return (
-              <button
-                key={pageIndex}
-                className={`px-2 rounded-sm ${
-                  page === pageIndex ? "bg-lamaSky" : ""
-                }`}
-                onClick={() => {
-                  changePage(pageIndex);
-                }}
-              >
-                {pageIndex}
-              </button>
-            );
-          }
-        )}
+      
+      <div className="flex gap-1">
+        {getPageNumbers().map(pageNum => (
+          <button
+            key={pageNum}
+            onClick={() => handlePageChange(pageNum)}
+            className={`px-3 py-1 rounded ${
+              currentPage === pageNum
+                ? "bg-blue-500 text-white"
+                : "bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
+            {pageNum}
+          </button>
+        ))}
       </div>
+      
       <button
-        className="py-2 px-4 rounded-md bg-slate-200 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         disabled={!hasNext}
-        onClick={() => {
-          changePage(page + 1);
-        }}
+        onClick={() => handlePageChange(currentPage + 1)}
+        className={`px-3 py-1 rounded ${
+          hasNext
+            ? "bg-blue-500 text-white hover:bg-blue-600"
+            : "bg-gray-200 text-gray-500 cursor-not-allowed"
+        }`}
       >
         Next
       </button>

@@ -1,63 +1,66 @@
-"use client";
+import { Metadata } from "next";
+import ProfileClient from "../components/profile/ProfileClient";
 
-import { useSession } from "next-auth/react";
-import Link from "next/link";
-import UserProfileCard from "@/app/components/profile/UserProfileCard";
-import Menu from "@/app/components/dashboard/Menu";
-import Navbar from "@/app/components/dashboard/Navbar";
-import { Loader } from "lucide-react";
+export const metadata: Metadata = {
+  title: 'Meu Perfil | BizControl - Sistema de Gestão de Produtos',
+  description: 'Gerencie suas informações pessoais, configurações de conta e preferências no sistema BizControl.',
+  keywords: ['perfil de usuário', 'configurações de conta', 'informações pessoais', 'preferências de usuário'],
+  openGraph: {
+    title: 'Meu Perfil - BizControl',
+    description: 'Gerencie suas informações pessoais e configurações de conta',
+    type: 'profile',
+    locale: 'pt_BR',
+    siteName: 'BizControl',
+  },
+  robots: {
+    index: false,
+    follow: true,
+    googleBot: {
+      index: false,
+      follow: true,
+    },
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-icon.png',
+  },
+};
+
+interface PersonData {
+  "@context": string;
+  "@type": string;
+  name: string;
+  description: string;
+  dateModified: string;
+  mainEntityOfPage: {
+    "@type": string;
+    "@id": string;
+  };
+}
 
 export default function ProfilePage() {
-  // Data e usuário atualizados conforme solicitado
-  const currentDate = "2025-03-15 11:41:58";
-  const currentUser = "sebastianascimento";
+  const currentDateTime = "2025-03-24 12:13:04";
   
-  const { status } = useSession({ required: true });
-  
-  // Renderizar loader enquanto a sessão está carregando
-  if (status === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
-          <p className="text-gray-500">Carregando informações do usuário...</p>
-        </div>
-      </div>
-    );
-  }
-  
+  const jsonLdData: PersonData = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "name": "Perfil de Usuário BizControl",
+    "description": "Página de perfil e configurações pessoais no sistema de gestão BizControl",
+    "dateModified": new Date(currentDateTime).toISOString(),
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://yourwebsite.com/profile"
+    }
+  };
+
   return (
-    <div className="h-screen flex">
-      {/* LEFT - Sidebar */}
-      <div className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4">
-        <Link
-          href="/"
-          className="flex items-center justify-center lg:justify-start gap-2"
-        >
-          <span className="hidden lg:block font-bold">BizControl</span>
-        </Link>
-        <Menu />
-      </div>
-
-      {/* RIGHT - Main content */}
-      <div className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4">
-        <Navbar />
-
-        <div className="bg-white p-6 rounded-md flex-1 m-4 mt-0">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-xl font-semibold">Meu Perfil</h1>
-          </div>
-          
-          {/* Card de Perfil do Usuário */}
-          <UserProfileCard editable={true} />
-          
-          {/* Rodapé da página de perfil */}
-          <footer className="mt-8 text-xs text-gray-500 text-right">
-            <p>Última atualização: {currentDate}</p>
-            <p>Usuário: {currentUser}</p>
-          </footer>
-        </div>
-      </div>
-    </div>
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
+      />
+      
+      <ProfileClient />
+    </>
   );
 }

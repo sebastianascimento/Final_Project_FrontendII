@@ -15,7 +15,6 @@ const MonthlyOrderChartContainer = () => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   
-  // MULTI-TENANT: Obter dados da sessão para identificar a empresa do usuário
   const { data: session, status } = useSession();
   const companyId = session?.user?.companyId;
   const companyName = session?.user?.companyName;
@@ -23,15 +22,12 @@ const MonthlyOrderChartContainer = () => {
   React.useEffect(() => {
     const fetchData = async () => {
       try {
-        // Verificar primeiro se há uma empresa configurada
         if (!companyId && status !== "loading") {
-          console.log("[2025-03-14 20:47:26] @sebastianascimento - Usuário sem empresa tentando acessar estatísticas mensais");
           setError("company_not_configured");
           setLoading(false);
           return;
         }
         
-        // MULTI-TENANT: Incluir companyId como parâmetro na chamada da API
         const response = await fetch(`/api/orders/monthly-stats?companyId=${companyId}`);
         
         if (!response.ok) {
@@ -41,13 +37,10 @@ const MonthlyOrderChartContainer = () => {
         const resData = await response.json();
         if (Array.isArray(resData)) {
           setData(resData);
-          console.log(`[2025-03-14 20:47:26] @sebastianascimento - Dados mensais carregados: ${resData.length} meses para empresa ${companyId}`);
         } else {
-          console.error("[2025-03-14 20:47:26] @sebastianascimento - Formato de dados inválido recebido");
           setData([]);
         }
       } catch (error) {
-        console.error("[2025-03-14 20:47:26] @sebastianascimento - Erro ao buscar dados mensais:", error);
         setError(error instanceof Error ? error.message : "Erro desconhecido");
         setData([]);
       } finally {
@@ -55,13 +48,11 @@ const MonthlyOrderChartContainer = () => {
       }
     };
 
-    // Só buscar dados se o status da sessão não estiver carregando
     if (status !== "loading") {
       fetchData();
     }
   }, [companyId, status]);
 
-  // MULTI-TENANT: Mostrar estado de carregamento enquanto a sessão está sendo carregada
   if (status === "loading" || loading) {
     return (
       <div className="bg-white rounded-lg p-4 h-full flex items-center justify-center">
@@ -70,7 +61,6 @@ const MonthlyOrderChartContainer = () => {
     );
   }
   
-  // MULTI-TENANT: Mostrar mensagem para configurar empresa se não houver empresa
   if (error === "company_not_configured" || !companyId) {
     return (
       <div className="bg-white rounded-lg p-4 h-full">
@@ -95,7 +85,6 @@ const MonthlyOrderChartContainer = () => {
     );
   }
   
-  // MULTI-TENANT: Mostrar erro genérico
   if (error) {
     return (
       <div className="bg-white rounded-lg p-4 h-full">
@@ -141,13 +130,6 @@ const MonthlyOrderChartContainer = () => {
           No monthly order data available for your company
         </div>
       )}
-      
-      {/* Selo da empresa para diagnóstico */}
-      <div className="mt-4 text-xs text-right text-gray-400">
-        <span>Company ID: {companyId}</span>
-        <span className="ml-1 text-gray-300">•</span>
-        <span className="ml-1">{new Date().toISOString().split('T')[0]}</span>
-      </div>
     </div>
   );
 };

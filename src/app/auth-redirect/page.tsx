@@ -1,9 +1,35 @@
-// [2025-03-14 11:34:47] @sebastianascimento - Página de redirecionamento após autenticação
 "use client";
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Redirecionando... | BizControl',
+  description: 'Aguarde enquanto te direcionamos para a página correta.',
+  robots: 'noindex, nofollow', 
+  viewport: 'width=device-width, initial-scale=1',
+  openGraph: {
+    title: 'Redirecionando | BizControl',
+    description: 'Sistema de gerenciamento empresarial',
+    images: [
+      {
+        url: '/images/og-image.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'BizControl Logo',
+      },
+    ],
+    siteName: 'BizControl',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Redirecionando | BizControl',
+    description: 'Sistema de gerenciamento empresarial',
+    images: ['/images/twitter-image.jpg'],
+  },
+};
 
 export default function AuthRedirectPage() {
   const { data: session, status } = useSession();
@@ -13,21 +39,17 @@ export default function AuthRedirectPage() {
   useEffect(() => {
     if (status === "loading") return;
     
-    // Se não estiver autenticado, redirecionar para login
     if (status === "unauthenticated") {
       router.push("/signin");
       return;
     }
     
-    // Verificar se tem empresa associada
     const hasCompany = session?.user?.hasCompany || session?.user?.companyId;
     
     if (!hasCompany) {
-      console.log("[2025-03-14 11:34:47] @sebastianascimento - Redirecionando para configuração de empresa");
       setMessage("Configurando sua conta...");
       router.push("/setup-company");
     } else {
-      console.log("[2025-03-14 11:34:47] @sebastianascimento - Redirecionando para dashboard");
       setMessage("Entrando no sistema...");
       router.push("/dashboard");
     }

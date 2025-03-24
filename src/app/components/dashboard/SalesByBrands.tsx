@@ -11,18 +11,17 @@ interface BrandSales {
   color: string;
 }
 
-// Cores distintas para o gráfico
 const BRAND_COLORS = [
-  "#FF6384", // vermelho
-  "#36A2EB", // azul
-  "#FFCE56", // amarelo
-  "#4BC0C0", // verde água
-  "#9966FF", // roxo
-  "#FF9F40", // laranja
-  "#8AC54F", // verde
-  "#EA80FC", // rosa
-  "#00E5FF", // ciano
-  "#FF5252", // vermelho claro
+  "#FF6384",
+  "#36A2EB",
+  "#FFCE56",
+  "#4BC0C0",
+  "#9966FF",
+  "#FF9F40",
+  "#8AC54F",
+  "#EA80FC",
+  "#00E5FF",
+  "#FF5252",
 ];
 
 const renderCustomizedLabel = ({
@@ -63,44 +62,30 @@ const SalesByBrands = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // MULTI-TENANT: Obter dados da sessão
   const { data: session, status } = useSession();
   const companyId = session?.user?.companyId;
   const companyName = session?.user?.companyName;
 
-  // Informações atualizadas conforme solicitado
-  const currentDate = "2025-03-15 09:51:16";
-  const currentUser = "sebastianascimento";
-
-  // Função para buscar dados
   const fetchBrandSales = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // MULTI-TENANT: Verificar se há empresa configurada
       if (status !== "loading" && !companyId) {
-        console.log(`[${currentDate}] @${currentUser} - Tentando acessar dados sem empresa configurada`);
         setError("company_not_configured");
         setLoading(false);
         return;
       }
 
-      // Aguardar carregamento da sessão
       if (status === "loading") {
         return;
       }
       
-      // MULTI-TENANT: Adicionar companyId à consulta
-      console.log(`[${currentDate}] @${currentUser} - Buscando vendas por marca para empresa: ${companyId}`);
-      
-      // Usar o caminho correto da API com parâmetro de companyId
       const response = await fetch(`/api/orders/brands?companyId=${companyId}`, {
         cache: 'no-store'
       });
       
       if (!response.ok) {
-        console.error(`[${currentDate}] @${currentUser} - Erro da API: ${response.status}`);
         throw new Error(`API error: ${response.status}`);
       }
       
@@ -110,27 +95,22 @@ const SalesByBrands = () => {
         throw new Error('Invalid response format');
       }
       
-      // MULTI-TENANT: Verificar se há dados para esta empresa específica
       if (data.length === 0) {
-        console.log(`[${currentDate}] @${currentUser} - Nenhum dado de vendas encontrado para empresa ${companyId}`);
         setError("no_data");
         setBrandsData([]);
         return;
       }
       
-      // Transformar os dados e adicionar cores
       const formattedData = data.map((brand, index) => ({
         name: brand.name,
         sales: brand.totalSales,
         color: BRAND_COLORS[index % BRAND_COLORS.length]
       }));
       
-      console.log(`[${currentDate}] @${currentUser} - Carregou ${formattedData.length} marcas para empresa ${companyId}`);
       setBrandsData(formattedData);
     } catch (err) {
-      console.error(`[${currentDate}] @${currentUser} - Erro ao processar dados:`, err);
       setError(err instanceof Error ? err.message : 'Unknown error');
-      setBrandsData([]); // Não usar dados falsos
+      setBrandsData([]);
     } finally {
       setLoading(false);
     }
@@ -142,7 +122,6 @@ const SalesByBrands = () => {
     }
   }, [companyId, status]);
 
-  // MULTI-TENANT: Tratar carregamento da sessão
   if (status === 'loading') {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4 flex items-center justify-center">
@@ -152,7 +131,6 @@ const SalesByBrands = () => {
     );
   }
 
-  // MULTI-TENANT: Mostrar mensagem quando não há empresa configurada
   if (error === "company_not_configured" || (!loading && !companyId)) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4">
@@ -175,7 +153,6 @@ const SalesByBrands = () => {
     );
   }
 
-  // Mostrar loader durante carregamento
   if (loading) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4 flex items-center justify-center">
@@ -184,7 +161,6 @@ const SalesByBrands = () => {
     );
   }
 
-  // Mostrar mensagem quando não há dados (em vez de dados falsos)
   if (error === "no_data" || brandsData.length === 0) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4">
@@ -228,7 +204,6 @@ const SalesByBrands = () => {
     );
   }
 
-  // Mostrar mensagem de erro geral
   if (error && error !== "no_data" && error !== "company_not_configured") {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4">
@@ -258,12 +233,10 @@ const SalesByBrands = () => {
 
   return (
     <div className="bg-white rounded-xl w-full h-full p-4">
-      {/* TÍTULO E LEGENDA */}
       <div className="flex justify-between items-start mb-4">
         <div>
           <h1 className="text-lg font-semibold flex items-center">
             Sales by Brands
-            {/* MULTI-TENANT: Mostrar nome da empresa */}
             {companyName && (
               <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
             )}
@@ -279,7 +252,6 @@ const SalesByBrands = () => {
         </div>
       </div>
       
-      {/* GRÁFICO */}
       <div className="relative w-full h-[75%]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>

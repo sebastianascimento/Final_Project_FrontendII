@@ -203,7 +203,6 @@ export async function countByCompany(model: ValidModels): Promise<number> {
   }
 }
 
-// Função helper para adicionar filtro de companyId a qualquer consulta
 export async function withCompanyFilter(filter: any = {}) {
   const companyId = await getCurrentCompanyId();
   return { ...filter, companyId };

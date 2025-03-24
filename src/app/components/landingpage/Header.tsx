@@ -15,34 +15,52 @@ const Header = () => {
 
   return (
     <header className="flex justify-center py-6">
-      <div 
-        className="flex items-center justify-between px-6 py-6 w-[90%] max-w-5xl shadow-lg backdrop-blur-lg rounded-[16px]"
-        style={{ backgroundColor: "rgba(13, 13, 13, 0.85)" }} 
+      <div
+        className="flex items-center justify-between px-6 py-2 w-[90%] max-w-5xl shadow-lg backdrop-blur-lg rounded-[16px]"
+        style={{ backgroundColor: "rgb(59 130 246 / 0.95)" }}
       >
         {/* Navegação Esquerda */}
         <nav className="flex space-x-4">
-          <Link href="/" className="px-4 py-2 rounded-full text-white hover:bg-gray-700">
+          <Link
+            href="/"
+            className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
+          >
             Home
           </Link>
-          <Link href="/blogs" className="px-4 py-2 rounded-full text-white hover:bg-gray-700">
+          <Link
+            href="/blogs"
+            className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
+          >
             Blogs
           </Link>
           {!session ? (
-            <Link href="/signin" className="px-4 py-2 rounded-full text-white hover:bg-gray-700">
+            <Link
+              href="/signin"
+              className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
+            >
               Sign in
             </Link>
           ) : (
-            <button onClick={handleSignOut} className="px-4 py-2 rounded-full text-white hover:bg-red-500">
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-2 rounded-full text-white hover:bg-red-500"
+            >
               Sign out
             </button>
           )}
         </nav>
 
         {/* Logo Central */}
-        <div className="text-lg font-bold text-white mx-auto">⚡</div>
+        <div className="text-lg font-bold text-white mx-auto">
+          <img
+            src="/icons/bizcontrol.png"
+            className="h-16 w-auto" 
+            alt="BizControl Logo"
+          />
+        </div>
 
         {/* Botão Direito */}
-        <button className="px-6 py-2 rounded-full bg-white text-black hover:bg-gray-200">
+        <button className="px-6 py-2 rounded-full bg-white text-blue-500 hover:bg-blue-50 transition-colors duration-200">
           Contact
         </button>
       </div>

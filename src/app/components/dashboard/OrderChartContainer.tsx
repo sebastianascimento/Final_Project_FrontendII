@@ -1,68 +1,63 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from "next/image";
 import OrderChart from "./OrderChart";
 import { useSession } from "next-auth/react";
 import { Building } from "lucide-react";
 
-// Tipagem forte para os dados processados
 interface ProcessedData {
   name: string;
   orders: number;
 }
 
 const OrderChartContainer = () => {
-  const [data, setData] = React.useState<ProcessedData[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const [data, setData] = useState<ProcessedData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   
-  // MULTI-TENANT: Obter informações da sessão do usuário
   const { data: session, status } = useSession();
   const companyId = session?.user?.companyId;
   const companyName = session?.user?.companyName;
 
-  // Dados atuais conforme solicitado
-  const currentDate = "2025-03-15 09:09:10";
-  const currentUser = "sebastianascimento";
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
 
-  React.useEffect(() => {
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
-        // Verificar se temos uma empresa configurada
         if (status !== "loading" && !companyId) {
-          console.log(`[${currentDate}] ${currentUser} - Tentando acessar dados de pedidos sem empresa configurada`);
           setError("company_not_configured");
           setLoading(false);
           return;
         }
 
-        // Aguardar o carregamento da sessão
         if (status === "loading") {
           return;
         }
         
-        // MULTI-TENANT: Adicionar companyId como parâmetro de consulta
-        console.log(`[${currentDate}] ${currentUser} - Buscando dados semanais para empresa: ${companyId}`);
         const response = await fetch(`/api/orders/weekly-stats?companyId=${companyId}`);
         
         if (!response.ok) {
-          console.error(`[${currentDate}] ${currentUser} - Erro ao buscar dados: ${response.status}`);
           throw new Error(`Failed to fetch order data: ${response.statusText}`);
         }
         
         const resData = await response.json();
-        // Verificar e garantir o formato correto dos dados
         if (Array.isArray(resData)) {
           setData(resData);
-          console.log(`[${currentDate}] ${currentUser} - Dados carregados: ${resData.length} dias para empresa ${companyId}`);
         } else {
-          console.error(`[${currentDate}] ${currentUser} - Formato de dados inválido recebido`);
           setData([]);
           setError("invalid_data_format");
         }
       } catch (error) {
-        console.error(`[${currentDate}] ${currentUser} - Erro ao buscar dados:`, error);
         setData([]);
         setError(error instanceof Error ? error.message : "Unknown error");
       } finally {
@@ -71,35 +66,33 @@ const OrderChartContainer = () => {
     };
 
     fetchData();
-  }, [companyId, status, currentDate, currentUser]);
+  }, [companyId, status]);
 
-  // MULTI-TENANT: Tratar carregamento da sessão
   if (status === "loading") {
     return (
-      <div className="bg-white rounded-lg p-4 h-full flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <span className="ml-2 text-gray-600">Carregando informações de usuário...</span>
+      <div className="bg-white rounded-lg p-3 sm:p-4 h-full flex items-center justify-center">
+        <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 sm:border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <span className="ml-2 text-sm sm:text-base text-gray-600">Carregando informações de usuário...</span>
       </div>
     );
   }
 
-  // MULTI-TENANT: Mostrar mensagem quando não há empresa configurada
   if (error === "company_not_configured" || (!loading && !companyId)) {
     return (
-      <div className="bg-white rounded-lg p-4 h-full">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-lg font-semibold">Orders of the week</h1>
+      <div className="bg-white rounded-lg p-3 sm:p-4 h-full">
+        <div className="flex justify-between items-center mb-2 sm:mb-4">
+          <h1 className="text-base sm:text-lg font-semibold">Orders of the week</h1>
         </div>
         
-        <div className="flex flex-col items-center justify-center h-[calc(100%-40px)] p-4">
-          <Building size={32} className="text-amber-500 mb-3" />
-          <h3 className="text-gray-800 font-medium mb-2">Empresa não configurada</h3>
-          <p className="text-gray-600 text-center text-sm mb-4">
+        <div className="flex flex-col items-center justify-center h-[calc(100%-32px)] sm:h-[calc(100%-40px)] p-2 sm:p-4">
+          <Building size={24} className="text-amber-500 mb-2 sm:mb-3" />
+          <h3 className="text-gray-800 font-medium text-sm sm:text-base mb-1 sm:mb-2">Empresa não configurada</h3>
+          <p className="text-gray-600 text-center text-xs sm:text-sm mb-3 sm:mb-4">
             Para visualizar os pedidos da semana, configure sua empresa primeiro.
           </p>
           <a 
             href="/setup-company" 
-            className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
+            className="px-2 sm:px-3 py-1 bg-blue-500 text-white text-xs sm:text-sm rounded hover:bg-blue-600 transition-colors"
           >
             Configurar Empresa
           </a>
@@ -108,46 +101,52 @@ const OrderChartContainer = () => {
     );
   }
 
-  // Mostrar estado de carregamento
   if (loading) {
     return (
-      <div className="bg-white rounded-lg p-4 h-full flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="bg-white rounded-lg p-3 sm:p-4 h-full flex items-center justify-center">
+        <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 sm:border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
-  // Mostrar mensagem de erro (exceto para company_not_configured que já é tratado)
   if (error && error !== "company_not_configured") {
     return (
-      <div className="bg-white rounded-lg p-4 h-full">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-lg font-semibold">Orders of the week</h1>
+      <div className="bg-white rounded-lg p-3 sm:p-4 h-full">
+        <div className="flex justify-between items-center mb-2 sm:mb-4">
+          <h1 className="text-base sm:text-lg font-semibold">Orders of the week</h1>
         </div>
         
-        <div className="flex items-center justify-center h-[calc(100%-40px)]">
+        <div className="flex items-center justify-center h-[calc(100%-32px)] sm:h-[calc(100%-40px)]">
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-3">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 mb-2 sm:mb-3">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <p className="text-gray-700 font-medium">Erro ao carregar dados</p>
-            <p className="text-red-500 text-sm mt-1">{error}</p>
+            <p className="text-gray-700 font-medium text-sm sm:text-base">Erro ao carregar dados</p>
+            <p className="text-red-500 text-xs sm:text-sm mt-1">{error}</p>
           </div>
         </div>
       </div>
     );
   }
 
+  const processedData = isMobile 
+    ? data.map(item => ({
+        name: item.name.charAt(0),
+        orders: item.orders
+      }))
+    : data;
+
   return (
-    <div className="bg-white rounded-lg p-4 h-full">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-lg font-semibold flex items-center">
+    <div className="bg-white rounded-lg p-3 sm:p-4 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-2 sm:mb-4">
+        <h1 className="text-base sm:text-lg font-semibold flex items-center">
           Orders of the week
-          {/* MULTI-TENANT: Mostrar nome da empresa quando disponível */}
           {companyName && (
-            <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
+            <span className="ml-1 sm:ml-2 text-xs sm:text-sm font-normal text-gray-500 truncate max-w-[120px] sm:max-w-[200px] md:max-w-none">
+              ({companyName})
+            </span>
           )}
         </h1>
         <Image 
@@ -155,17 +154,21 @@ const OrderChartContainer = () => {
           alt="More options" 
           width={20} 
           height={20}
-          className="cursor-pointer"
+          className="cursor-pointer w-4 h-4 sm:w-5 sm:h-5"
         />
       </div>
       
-      {data.length > 0 ? (
-        <OrderChart data={data} />
-      ) : (
-        <div className="flex items-center justify-center h-[calc(100%-40px)] text-gray-500">
-          No orders data available for your company
-        </div>
-      )}
+      <div className="flex-grow">
+        {data.length > 0 ? (
+          <div className="h-full w-full">
+            <OrderChart data={processedData} />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-xs sm:text-sm md:text-base text-gray-500">
+            No orders data available for your company
+          </div>
+        )}
+      </div>
     </div>
   );
 };

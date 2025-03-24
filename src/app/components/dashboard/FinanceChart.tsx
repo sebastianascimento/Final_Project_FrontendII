@@ -29,7 +29,6 @@ interface MonthData {
 }
 
 const FinanceChart = () => {
-
   const { data: session, status } = useSession();
   const companyId = session?.user?.companyId;
   const companyName = session?.user?.companyName;
@@ -39,6 +38,17 @@ const FinanceChart = () => {
   const [error, setError] = useState<string | null>(null);
   const [totalSpent, setTotalSpent] = useState<number>(0);
   const [dataFound, setDataFound] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkIfMobile();
+    window.addEventListener('resize', checkIfMobile);
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
 
   const fetchFinanceData = async () => {
     try {
@@ -63,10 +73,8 @@ const FinanceChart = () => {
       const orders: Order[] = await response.json();
       
       if (orders && orders.length > 0) {
-        // Processar os dados por mês
         const monthlyData = processOrdersByMonth(orders);
         
-        // Calcular o total gasto
         const total = orders.reduce((sum, order) => sum + order.total, 0);
         
         setChartData(monthlyData);
@@ -119,14 +127,12 @@ const FinanceChart = () => {
           
           monthlyTotals[monthName].expense += order.total;
           
-          // Para dados de receita (simulação - não temos dados reais de receita)
           monthlyTotals[monthName].income += order.total * 1.2;
         }
       } catch (e) {
       }
     });
     
-    // Converter o objeto em um array para o gráfico
     return Object.keys(monthlyTotals).map(month => ({
       name: month,
       expense: monthlyTotals[month].expense,
@@ -134,7 +140,6 @@ const FinanceChart = () => {
     }));
   };
   
-  // Formatador de moeda
   const formatCurrency = (value: number): string => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -143,8 +148,17 @@ const FinanceChart = () => {
       maximumFractionDigits: 0,
     }).format(value);
   };
+
+  const getProcessedChartData = () => {
+    if (isMobile) {
+      return chartData.map(item => ({
+        ...item,
+        name: item.name.charAt(0)
+      }));
+    }
+    return chartData;
+  };
   
-  // MULTI-TENANT: Tratar carregamento da sessão
   if (status === 'loading') {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4 flex items-center justify-center">
@@ -156,7 +170,6 @@ const FinanceChart = () => {
     );
   }
   
-  // Mostrar loader enquanto os dados estão sendo carregados
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4 flex items-center justify-center">
@@ -168,14 +181,12 @@ const FinanceChart = () => {
     );
   }
 
-  // Se não encontrou dados, mostrar mensagem
   if (!dataFound) {
     return (
       <div className="bg-white rounded-xl w-full h-full p-4">
         <div className="flex justify-between items-center mb-2">
           <h1 className="text-lg font-semibold flex items-center">
             Finance
-            {/* MULTI-TENANT: Mostrar nome da empresa quando disponível */}
             {companyName && (
               <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
             )}
@@ -215,14 +226,17 @@ const FinanceChart = () => {
     );
   }
 
+  const processedData = getProcessedChartData();
+
   return (
     <div className="bg-white rounded-xl w-full h-full p-4">
       <div className="flex justify-between items-center mb-2">
         <h1 className="text-lg font-semibold flex items-center">
           Finance
-          {/* MULTI-TENANT: Mostrar nome da empresa quando disponível */}
           {companyName && (
-            <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
+            <span className="ml-2 text-sm font-normal text-gray-500 truncate max-w-[120px] sm:max-w-[200px] md:max-w-none">
+              ({companyName})
+            </span>
           )}
         </h1>
         <div className="flex items-center gap-2">
@@ -237,17 +251,15 @@ const FinanceChart = () => {
         </div>
       </div>
       
-      {/* Display Total Amount Spent */}
       <div className="mt-1 mb-4 bg-purple-50 rounded-lg p-3">
         <div className="text-sm text-gray-500">Total Amount Spent</div>
         <div className="text-xl font-bold text-purple-600">{formatCurrency(totalSpent)}</div>
       </div>
       
-      {/* Observe a altura fixa aqui - importante para garantir que o gráfico seja visível */}
       <div style={{ height: '300px', width: '100%' }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={chartData}
+            data={processedData}
             margin={{
               top: 5,
               right: 30,

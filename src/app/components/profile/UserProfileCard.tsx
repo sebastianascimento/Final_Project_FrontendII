@@ -1,261 +1,179 @@
 "use client";
 
-import Image from "next/image";
-import { useState, useEffect } from "react";
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { useSession } from "next-auth/react";
-import { Edit, Mail, Phone, Calendar, Building, MapPin, Briefcase, Loader } from "lucide-react";
-
-interface UserProfileData {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-  phone?: string | null;
-  position?: string | null;
-  department?: string | null;
-  joinDate?: Date | string | null;
-  location?: string | null;
-  bio?: string | null;
-  companyId?: string | null;
-  companyName?: string | null;
-  companyLogo?: string | null;
-  companyRole?: string | null;
-}
+import { Camera, Check, X } from 'lucide-react';
 
 interface UserProfileCardProps {
   editable?: boolean;
 }
 
-const UserProfileCard = ({ editable = false }: UserProfileCardProps) => {
-  const currentDate = "2025-03-15 11:18:00";
-  const currentUser = "sebastianascimento";
-  
-  const { data: session, status } = useSession();
-  
-  const [profileData, setProfileData] = useState<UserProfileData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isUsingFallback, setIsUsingFallback] = useState(false);
-  
-  // Buscar dados do perfil do banco de dados
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      try {
-        if (status === "loading") return;
-        
-        if (status === "unauthenticated") {
-          setError("Usuário não autenticado");
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log(`[${currentDate}] @${currentUser} - Buscando dados do perfil do banco de dados`);
-        const response = await fetch('/api/user/profile').catch(err => {
-          console.error(`[${currentDate}] @${currentUser} - Erro na requisição:`, err);
-          return null;
-        });
-        
-        // Se a API não estiver disponível, usar dados da sessão como fallback
-        if (!response) {
-          console.log(`[${currentDate}] @${currentUser} - API não disponível, usando dados da sessão como fallback`);
-          setIsUsingFallback(true);
-          setProfileData({
-            id: session?.user?.id || "",
-            name: session?.user?.name || "Usuário",
-            email: session?.user?.email || "",
-            image: session?.user?.image || "/noAvatar.png",
-            companyId: session?.user?.companyId,
-            companyName: session?.user?.companyName,
-          });
-          setIsLoading(false);
-          return;
-        }
-        
-        if (!response.ok) {
-          // Se for 404, usar fallback em vez de mostrar erro
-          if (response.status === 404) {
-            console.log(`[${currentDate}] @${currentUser} - API retornou 404, usando dados da sessão como fallback`);
-            setIsUsingFallback(true);
-            setProfileData({
-              id: session?.user?.id || "",
-              name: session?.user?.name || "Usuário",
-              email: session?.user?.email || "",
-              image: session?.user?.image || "/noAvatar.png",
-              companyId: session?.user?.companyId,
-              companyName: session?.user?.companyName,
-            });
-            setIsLoading(false);
-            return;
-          }
-          
-          throw new Error(`Erro ao buscar perfil: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log(`[${currentDate}] @${currentUser} - Dados do perfil recebidos:`, data);
-        setProfileData(data);
-        setIsUsingFallback(false);
-      } catch (err) {
-        console.error(`[${currentDate}] @${currentUser} - Erro:`, err);
-        setError(err instanceof Error ? err.message : "Erro desconhecido");
-        
-        // Mesmo com erro, tentar usar fallback
-        setIsUsingFallback(true);
-        setProfileData({
-          id: session?.user?.id || "",
-          name: session?.user?.name || "Usuário",
-          email: session?.user?.email || "",
-          image: session?.user?.image || "/noAvatar.png",
-          companyId: session?.user?.companyId,
-          companyName: session?.user?.companyName,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchProfileData();
-  }, [status, currentDate, currentUser, session?.user]);
-  
-  // Determinar se o usuário pode editar o perfil
-  const canEdit = editable || (session?.user?.id === profileData?.id);
-  
-  // Formatar data de ingresso se disponível
-  const formattedJoinDate = profileData?.joinDate 
-    ? new Intl.DateTimeFormat("pt-BR").format(new Date(profileData.joinDate))
-    : null;
-  
-  // Mostrar estado de carregamento
-  if (isLoading) {
-    return (
-      <div className="bg-lamaSky py-6 px-4 rounded-md flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
-          <p className="text-sm text-gray-600">Carregando dados do perfil...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Se não temos dados de perfil nem fallback, mostrar erro
-  if (!profileData && error) {
-    return (
-      <div className="bg-red-50 py-6 px-4 rounded-md flex-1">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-3">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-red-800 mb-1">Erro ao carregar perfil</h3>
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Se chegamos aqui, temos dados de perfil (da API ou fallback)
-  const user = profileData!;
+// Define the type for our user based on the error message
+interface SessionUser {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  hasCompany: boolean;
+  companyId: string;
+  companyName: string;
+  // These optional properties might not exist in your user object
+  role?: string;
+  createdAt?: string;
+}
 
+const UserProfileCard: React.FC<UserProfileCardProps> = ({ editable = false }) => {
+  const { data: session } = useSession();
+  const user = session?.user as SessionUser | undefined;
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  
+  const handleSave = () => {
+    // Here you would normally implement API calls to save changes
+    setIsEditing(false);
+  };
+  
+  const handleCancel = () => {
+    // Reset to original values
+    setName(user?.name || "");
+    setEmail(user?.email || "");
+    setIsEditing(false);
+  };
+  
+  // Current date for "member since" if createdAt is not available
+  const formattedDate = new Date("2025-03-21 10:11:16").toLocaleDateString();
+  
   return (
-    <div className="bg-lamaSky py-6 px-4 rounded-md flex-1 flex gap-4">
-      {/* SEÇÃO DA IMAGEM */}
-      <div className="w-1/3">
-        <div className="relative">
-          <Image
-            src={user.image || "/noAvatar.png"}
-            alt={`Foto de perfil de ${user.name}`}
-            width={144}
-            height={144}
-            className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md"
-          />
-          {canEdit && (
+    <div className="bg-white rounded-lg shadow">
+      <div className="flex flex-col items-center md:flex-row md:items-start p-6">
+        {/* Profile Image - Responsive container */}
+        <div className="relative w-32 h-32 mb-4 md:mb-0 md:mr-6 flex-shrink-0">
+          <div className="relative w-full h-full rounded-full overflow-hidden">
+            {/* Responsive Image with proper aspect ratio */}
+            <Image
+              src={user?.image || '/default-avatar.png'}
+              alt={`Foto de perfil de ${user?.name || 'usuário'}`}
+              fill
+              sizes="(max-width: 768px) 128px, 128px"
+              className="object-cover"
+              priority
+            />
+          </div>
+          
+          {/* Camera overlay for image editing */}
+          {editable && (
             <button 
               className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
-              aria-label="Editar foto de perfil"
+              aria-label="Alterar foto de perfil"
             >
-              <Edit size={16} />
+              <Camera size={16} />
             </button>
+          )}
+        </div>
+        
+        {/* User Information */}
+        <div className="flex-1 w-full text-center md:text-left">
+          {isEditing ? (
+            <>
+              <div className="mb-4">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full md:w-3/4 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full md:w-3/4 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="flex justify-center md:justify-start space-x-2 mt-4">
+                <button 
+                  onClick={handleSave}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  <Check size={16} className="mr-1" />
+                  Salvar
+                </button>
+                <button 
+                  onClick={handleCancel}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                >
+                  <X size={16} className="mr-1" />
+                  Cancelar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-semibold">{user?.name || "Nome do Usuário"}</h2>
+              <p className="text-gray-600 mb-2">{user?.email || "email@exemplo.com"}</p>
+              
+              <p className="text-gray-500 text-sm">
+                Membro desde: {formattedDate}
+              </p>
+              
+              {user?.companyName && (
+                <p className="text-gray-500 text-sm">
+                  Empresa: {user.companyName}
+                </p>
+              )}
+              
+              {editable && (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block"
+                >
+                  Editar Perfil
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
       
-      {/* SEÇÃO DE INFORMAÇÕES */}
-      <div className="w-2/3 flex flex-col justify-between gap-4">
-        {/* Nome e botão de edição */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{user.name}</h1>
-          <div className="flex items-center gap-2">
-            {isUsingFallback && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded">
-                Dados básicos
-              </span>
-            )}
-            {canEdit && (
-              <button 
-                className="text-xs bg-white px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 transition-colors"
-                aria-label="Editar informações do perfil"
-              >
-                Editar Perfil
-              </button>
-            )}
+      {/* Additional user information section */}
+      <div className="border-t border-gray-200 px-6 py-4">
+        <h3 className="text-lg font-medium mb-2">Informações Adicionais</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-500">Função</p>
+            <p>{"Usuário Padrão"}</p>
           </div>
-        </div>
-        
-        {/* Cargo da empresa (se disponível) */}
-        {(user.position || user.companyRole) && (
-          <div className="flex items-center gap-2 text-sm text-blue-700">
-            <Briefcase size={16} className="text-blue-500" />
-            <span>{user.position || user.companyRole}</span>
-            
-            {user.department && (
-              <span className="text-gray-500">• {user.department}</span>
-            )}
+          <div>
+            <p className="text-sm text-gray-500">Status</p>
+            <p className="inline-flex items-center">
+              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+              Ativo
+            </p>
           </div>
-        )}
-        
-        {/* Bio/Descrição */}
-        <p className="text-sm text-gray-500">
-          {user.bio || `Membro da equipe desde ${formattedJoinDate || "recentemente"}.`}
-        </p>
-        
-        {/* Informações de contato e dados pessoais */}
-        <div className="flex items-center justify-between gap-2 flex-wrap text-xs font-medium">
-          {/* Email */}
-          <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
-            <Mail size={14} className="text-gray-500" />
-            <span>{user.email || "-"}</span>
+          <div>
+            <p className="text-sm text-gray-500">Último acesso</p>
+            <p>2025-03-21 10:11:16</p>
           </div>
-          
-          {/* Telefone */}
-          <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
-            <Phone size={14} className="text-gray-500" />
-            <span>{user.phone || "-"}</span>
+          <div>
+            <p className="text-sm text-gray-500">ID do usuário</p>
+            <p className="text-xs bg-gray-100 px-2 py-1 rounded inline-block">
+              {user?.id || "USER123456"}
+            </p>
           </div>
-          
-          {/* Data de ingresso */}
-          {formattedJoinDate && (
-            <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
-              <Calendar size={14} className="text-gray-500" />
-              <span>Desde {formattedJoinDate}</span>
-            </div>
-          )}
-          
-          {/* Localização */}
-          {user.location && (
-            <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2">
-              <MapPin size={14} className="text-gray-500" />
-              <span>{user.location}</span>
-            </div>
-          )}
-          
-          {/* Empresa (apenas se multi-tenant) */}
-          {user.companyName && (
-            <div className="w-full md:w-1/3 lg:w-full 2xl:w-1/3 flex items-center gap-2 bg-blue-50 px-1.5 py-0.5 rounded">
-              <Building size={14} className="text-blue-500" />
-              <span className="text-blue-700">{user.companyName}</span>
-            </div>
-          )}
         </div>
       </div>
     </div>

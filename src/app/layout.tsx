@@ -3,16 +3,17 @@
 import { SessionProvider } from "next-auth/react";
 import type { ReactNode } from "react";
 import "../styles/globals.css";
-import { Metadata } from "next";
-
+import { ReduxProvider } from "./providers/ReduxProvider";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="eng">
+    <html lang="en">
       <body>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <ReduxProvider>
+          <SessionProvider>
+            {children}
+          </SessionProvider>
+        </ReduxProvider>
       </body>
     </html>
   );

@@ -10,9 +10,10 @@ export const productSchema = z.object({
   categoryName: z.string().min(1, { message: "Category name is required!" }),
   brandName: z.string().min(1, { message: "Brand name is required!" }),
   supplierName: z.string().min(1, { message: "Supplier name is required!" }),
+  imageUrl: z.string().url().optional(),
   supplierContactInfo: z.string().optional(),
   info: z.string().optional(),
-  companyId: z.string().optional(), // Campo adicionado para relacionamento com empresa
+  companyId: z.string().optional(), 
 });
 
 export type ProductSchema = z.infer<typeof productSchema>;
@@ -24,7 +25,7 @@ export const orderSchema = z.object({
   address: z.string().min(3, { message: "Address is required!" }).default("Default Address"),
   quantity: z.coerce.number().min(1, { message: "Quantity must be at least 1!" }),
   status: z.enum(["PENDING", "SHIPPED", "DELIVERED", "CANCELLED"]).default("PENDING"),
-  companyId: z.string().optional(), // Campo adicionado para relacionamento com empresa
+  companyId: z.string().optional(), 
 });
 
 export type OrderSchema = z.infer<typeof orderSchema>;
@@ -35,7 +36,7 @@ export const customerSchema = z.object({
   email: z.string().email({ message: "Invalid email address!" }),
   address: z.string().min(5, { message: "Address is required (min 5 characters)!" }),
   picture: z.string().url({ message: "Picture must be a valid URL!" }).optional().or(z.literal("")),
-  companyId: z.string().optional(), // Campo adicionado para relacionamento com empresa
+  companyId: z.string().optional(), 
 });
 
 export type CustomerSchema = z.infer<typeof customerSchema>;
@@ -71,7 +72,8 @@ export const stockSchema = z.object({
   supplierId: z.coerce.number({
     message: "Supplier ID is required",
   }),
-  companyId: z.string().optional(), 
+  companyId: z.string().optional(),
+  supplierName: z.string().optional(),
 });
 
 export type StockSchema = z.infer<typeof stockSchema>;

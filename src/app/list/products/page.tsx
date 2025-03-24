@@ -1,4 +1,3 @@
-// [2025-03-14 12:23:34] @sebastianascimento - Correção de isolamento multi-tenant
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
@@ -6,181 +5,363 @@ import Menu from "../../components/dashboard/Menu";
 import Navbar from "../../components/dashboard/Navbar";
 import TableSearch from "../../components/products/TableSearch";
 import Pagination from "@/app/components/products/Pagination";
-import Table from "../../components/products/Table";
+// Mantendo o import do Image caso seja usado em outros lugares
 import Image from "next/image";
-import FormModal from "@/app/components/FormModal";
-import { Prisma, Product, Category, Brand, Supplier } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { ITEM_PER_PAGE } from "@/app/lib/setting";
+import FormModal from "../../components/FormModal";
 import { redirect } from "next/navigation";
+import { Metadata } from "next";
 
-export const dynamic = 'force-dynamic';
-
-type ProductList = Product & { category: Category } & { brand: Brand } & { supplier: Supplier };
-
-const columns = [
-  { header: "Info", accessor: "info" },
-  { header: "Product ID", accessor: "productId", className: "hidden md:table-cell" },
-  { header: "Category", accessor: "category", className: "hidden md:table-cell" },
-  { header: "Brand", accessor: "brand", className: "hidden md:table-cell" },
-  { header: "Supplier", accessor: "supplier", className: "hidden lg:table-cell" },
-  { header: "Price", accessor: "price", className: "hidden lg:table-cell" },
-];
-
-const renderRow = (item: ProductList) => {
-  return (
-    <tr key={item.id} className="border-b border-gray-200 even:bg-gray-50 text-sm hover:bg-lamaPurpleLight">
-      <td className="flex items-center gap-4 p-4">
-        <Image
-          src={item.img || "/noAvatar.png"}
-          alt=""
-          width={40}
-          height={40}
-          className="md:hidden xl:block w-10 h-10 rounded-full object-cover"
-        />
-        <div className="flex flex-col">
-          <h3 className="font-semibold">{item.name}</h3>
-          <p className="text-xs text-gray-500">{item?.description}</p>
-        </div>
-      </td>
-      <td className="hidden md:table-cell">{item.id}</td>
-      <td className="hidden md:table-cell">{item.category?.name || "N/A"}</td>
-      <td className="hidden md:table-cell">{item.brand?.name || "N/A"}</td>
-      <td className="hidden md:table-cell">{item.supplier?.name || "N/A"}</td>
-      <td className="hidden md:table-cell">{item.price}</td>
-      <td>
-        <div className="flex items-center gap-2">
-          <FormModal table="product" type="update" id={item.id} data={item} />
-          <FormModal table="product" type="delete" id={item.id} />
-        </div>
-      </td>
-    </tr>
-  );
+export const metadata: Metadata = {
+  title: 'Produtos | BizControl - Sistema de Gestão de Produtos',
+  description: 'Gerencie o catálogo de produtos da sua empresa. Adicione, edite e exclua produtos facilmente.',
+  keywords: ['gerenciamento de produtos', 'catálogo de produtos', 'inventário', 'estoque', 'preços'],
+  openGraph: {
+    title: 'Gerenciamento de Produtos - BizControl',
+    description: 'Sistema completo para gestão do catálogo de produtos da sua empresa',
+    type: 'website',
+    locale: 'pt_BR',
+    siteName: 'BizControl',
+  },
+  robots: {
+    index: false,
+    follow: true,
+    googleBot: {
+      index: false,
+      follow: true,
+    },
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-icon.png',
+  },
 };
 
-export default async function ProductsPage({
-  searchParams
-}: {
-  searchParams: Promise<{ 
+interface PageProps {
+  searchParams: {
     page?: string;
-    categoryId?: string;
     search?: string;
-  }>;
-}) {
-  const params = await searchParams;
-  
-  // OBTER SESSÃO E VERIFICAR AUTENTICAÇÃO
+  };
+}
+
+interface ProductOffer {
+  "@type": string;
+  price: string;
+  priceCurrency: string;
+}
+
+interface ProductItem {
+  "@type": string;
+  name: string;
+  description: string;
+  // Removido o campo image
+  offers: ProductOffer;
+}
+
+interface ListItem {
+  "@type": string;
+  position: number;
+  item: ProductItem;
+}
+
+interface ProductListData {
+  "@context": string;
+  "@type": string;
+  name: string;
+  description: string;
+  numberOfItems: number;
+  itemListOrder: string;
+  itemListElement: ListItem[];
+}
+
+
+async function getSearchParams(params: any) {
+  return params;
+}
+
+async function getProductsData(
+  companyId: string,
+  pageParam: string,
+  searchParam: string
+) {
+  const page = Number(pageParam) || 1;
+  const currentPage = Math.max(1, page);
+  const searchTerm = searchParam || "";
+  const take = ITEM_PER_PAGE;
+  const skip = ITEM_PER_PAGE * (currentPage - 1);
+
+  let where: Prisma.ProductWhereInput = { companyId };
+
+  if (searchTerm) {
+    where = {
+      AND: [
+        { companyId },
+        {
+          OR: [
+            {
+              name: {
+                contains: searchTerm,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+            {
+              description: {
+                contains: searchTerm,
+                mode: Prisma.QueryMode.insensitive,
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const [products, totalCount] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      skip,
+      take,
+      orderBy: { name: "asc" },
+      include: {
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  return {
+    products,
+    totalCount,
+    currentPage,
+    searchTerm
+  };
+}
+
+export default async function ProductsPage({ searchParams }: PageProps) {
+  // First, get session data
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user) {
     redirect("/signin");
   }
-  
-  // CRÍTICO: VERIFICAR SE O USUÁRIO TEM UMA EMPRESA ASSOCIADA
+
   if (!session.user.companyId) {
-    console.log("[2025-03-14 12:23:34] @sebastianascimento - Usuário sem empresa, redirecionando para setup");
     redirect("/setup-company");
   }
-  
-  // ESSENCIAL: Obter o companyId do usuário atual para isolamento multi-tenant
+
   const companyId = session.user.companyId;
+
+  // This is the key fix - await the searchParams using the helper function
+  const awaitedParams = await getSearchParams(searchParams);
+  const pageValue = awaitedParams.page || "1";
+  const searchValue = awaitedParams.search || "";
   
-  // Log para depuração
-  console.log(`[2025-03-14 12:23:34] @sebastianascimento - Listando produtos para empresa: ${companyId}`);
-  
-  const page = Number(params.page) || 1;
-  const currentPage = Math.max(1, page);
-  const categoryId = params.categoryId ? Number(params.categoryId) : undefined;
-  const searchTerm = params.search;
-  
-  // CRÍTICO: Iniciar o filtro com companyId para garantir isolamento multi-tenant
-  const where: Prisma.ProductWhereInput = {
-    companyId: companyId  // ESTA É A LINHA CRUCIAL - Garante isolamento por empresa
+  // Structured data for product catalog page with proper type
+  const jsonLdData: ProductListData = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Catálogo de Produtos",
+    "description": "Lista de produtos disponíveis em nosso sistema",
+    "numberOfItems": 0, // Will be updated in the try block if successful
+    "itemListOrder": "Ascending",
+    "itemListElement": [] // Initialize as empty array
   };
   
-  if (categoryId && !isNaN(categoryId)) {
-    where.categoryId = categoryId;
-  }
-  
-  if (searchTerm) {
-    where.OR = [
-      { name: { contains: searchTerm, mode: 'insensitive' } },
-      { description: { contains: searchTerm, mode: 'insensitive' } }
-    ];
-  }
-  
-  const take = ITEM_PER_PAGE;
-  const skip = ITEM_PER_PAGE * (currentPage - 1);
-  
   try {
-    // SEGURANÇA: Agora todas as consultas respeitam o isolamento por empresa
-    const data = await prisma.product.findMany({
-      where,  // Inclui companyId no filtro
-      include: {
-        category: true,
-        brand: true,
-        supplier: true,
-      },
-      take,
-      skip,
-    });
+    // Pass the extracted values to the function
+    const { 
+      products, 
+      totalCount, 
+      currentPage,
+      searchTerm 
+    } = await getProductsData(
+      companyId,
+      pageValue,
+      searchValue
+    );
+
+    // Update the structured data with actual product count and items
+    jsonLdData.numberOfItems = totalCount;
     
-    const count = await prisma.product.count({ where });  // Também filtrado por companyId
+    // Type-safe mapping of products to ListItem array - sem o campo image
+    const itemListElements: ListItem[] = products.map((product, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "item": {
+        "@type": "Product",
+        "name": product.name,
+        "description": product.description || "Sem descrição",
+        "offers": {
+          "@type": "Offer",
+          "price": product.price.toString(),
+          "priceCurrency": "USD"
+        }
+      }
+    }));
     
-    // Log para depuração
-    console.log(`[2025-03-14 12:23:34] @sebastianascimento - Encontrados ${data.length} produtos para empresa ${companyId}`);
-    
+    // Assign the properly typed array
+    jsonLdData.itemListElement = itemListElements;
+
     return (
-      <div className="h-screen flex">
-        {/* LEFT - Sidebar */}
-        <div className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4">
-          <Link href="/" className="flex items-center justify-center lg:justify-start gap-2">
-            <span className="hidden lg:block font-bold">BizControl</span>
-          </Link>
-          <Menu />
-        </div>
+      <>
+        {/* Add structured data script for better search results */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
+        />
+        
+        <div className="h-screen flex">
+          {/* LEFT - Sidebar */}
+          <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+            <Link
+              href="/"
+              className="flex items-center justify-center lg:justify-start gap-2"
+              aria-label="Ir para página inicial"
+            >
+              <span className="hidden lg:block font-bold">BizControl</span>
+            </Link>
+            <Menu />
+          </nav>
 
-        {/* RIGHT - Main content */}
-        <div className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4">
-          <Navbar />
+          {/* RIGHT - Main content - Added pt-8 to move content down */}
+          <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-8">
+            <header>
+              <Navbar />
+            </header>
+            
+            {/* Added more space after the header - 64px of space */}
+            <div className="h-6" aria-hidden="true"></div>
 
-          <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">
-            <div className="flex items-center justify-between">
-              <h1 className="hidden md:block text-lg font-semibold">
-                All Products
-              </h1>
-              <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-                <TableSearch />
-                <div className="flex items-center gap-4 self-end">
-                  <button className="w-8 h-8 flex items-center justify-center rounded-full bg-lamaYellow">
-                    <Image
-                      src="/icons/noavatar.png"
-                      alt=""
-                      width={14}
-                      height={14}
-                    />
-                  </button>
-                  <FormModal table="product" type="create" />
+            {/* Added more top margin to move content down */}
+            <section className="bg-white p-4 rounded-md flex-1 m-4 mt-12">
+              <div className="flex items-center justify-between">
+                <h1 className="hidden md:block text-lg font-semibold">
+                  All Products
+                </h1>
+                <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                  <TableSearch initialValue={searchTerm} />
+                  <div className="flex items-center gap-4 self-end">
+                    <FormModal table="product" type="create" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <Table columns={columns} renderRow={renderRow} data={data} />
-            <Pagination page={currentPage} count={count} />
-          </div>
+              {/* Products Table */}
+              <div className="mt-6 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200" aria-label="Lista de Produtos">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Product
+                      </th>
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                        Category
+                      </th>
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                        Brand
+                      </th>
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                        Supplier
+                      </th>
+                      <th scope="col" className="p-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {products.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-4 text-center">
+                          <p className="text-gray-500">
+                            Nenhum produto encontrado
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((product) => (
+                        <tr
+                          key={product.id}
+                          className="border-b border-gray-200 even:bg-gray-50 text-sm hover:bg-lamaPurpleLight"
+                        >
+                          <td className="p-4">
+                            <div>
+                              {/* Removida a div da imagem */}
+                              <div className="text-sm font-medium text-gray-900">
+                                {product.name}
+                              </div>
+                              <div className="text-sm text-gray-500 truncate max-w-[300px]">
+                                {product.description || "Sem descrição"}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            $ {Number(product.price).toFixed(2)}
+                          </td>
+                          <td className="p-4 hidden md:table-cell">
+                            {product.category?.name || "N/A"}
+                          </td>
+                          <td className="p-4 hidden md:table-cell">
+                            {product.brand?.name || "N/A"}
+                          </td>
+                          <td className="p-4 hidden lg:table-cell">
+                            {product.supplier?.name || "N/A"}
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className="flex items-center gap-2 justify-end">
+                              <FormModal
+                                table="product"
+                                type="update"
+                                data={product}
+                                id={product.id}
+                              />
+                              <FormModal
+                                table="product"
+                                type="delete"
+                                id={product.id}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination page={currentPage} count={totalCount} />
+              
+            </section>
+          </main>
+        </div>
+      </>
+    );
+  } catch (error) {
+    console.error("Error loading products:", error);
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-4 bg-gray-50" role="alert" aria-live="assertive">
+        <div className="bg-white p-6 rounded-lg shadow-md max-w-lg w-full">
+          <h1 className="text-xl font-bold text-red-600 mb-2">
+            Erro ao carregar produtos
+          </h1>
+          <p className="text-gray-600">
+            Ocorreu um problema ao carregar os produtos. Por favor, tente
+            novamente mais tarde.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-block mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Voltar ao Dashboard
+          </Link>
         </div>
       </div>
     );
-  } catch (error) {
-    console.error("[2025-03-14 12:23:34] @sebastianascimento - Erro ao listar produtos:", error);
-    return (
-      <div className="p-8">
-        <h1 className="text-red-500 text-xl">Erro ao carregar produtos</h1>
-        <p className="text-gray-600">Tente novamente ou contate o suporte.</p>
-        <Link href="/dashboard" className="text-blue-500 mt-4 inline-block">
-          Voltar ao dashboard
-        </Link>
-      </div>
-    );
   }
-}
+}   

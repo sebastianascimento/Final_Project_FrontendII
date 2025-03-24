@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { useState, useEffect, useRef } from "react";
+import { Menu as MenuIcon, X } from "lucide-react";
 
-// Interface para itens do menu com tipo mais preciso
 interface MenuItem {
   icon: string;
   label: string;
@@ -85,8 +86,8 @@ const menuItems: MenuSection[] = [
       {
         icon: "/icons/logout.png",
         label: "Logout",
-        href: "#", // Link fictício (corrige o erro de tipo)
-        action: "logout", // Marcador especial para ação de logout
+        href: "#",
+        action: "logout",
         visible: ["admin", "teacher", "student", "parent"],
       },
     ],
@@ -95,61 +96,148 @@ const menuItems: MenuSection[] = [
 
 const Menu = () => {
   const router = useRouter();
-  const currentDate = "2025-03-15 13:25:51";
-  const currentUser = "sebastianascimento";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Função para lidar com o logout
-  const handleLogout = async () => {
-    console.log(`[${currentDate}] @${currentUser} - Realizando logout da aplicação`);
+  // Handle clicks outside the menu to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
+
+  // Close mobile menu on navigation
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setMobileMenuOpen(false);
+    };
+
+    window.addEventListener('popstate', handleRouteChange);
+    
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, []);
+
+  const handleLogout = async () => {
     try {
       await signOut({ redirect: false });
-      
-      console.log(`[${currentDate}] @${currentUser} - Logout bem-sucedido, redirecionando para página inicial`);
       router.push("/");
     } catch (error) {
-      console.error(`[${currentDate}] @${currentUser} - Erro ao realizar logout:`, error);
+      console.error("Error during logout:", error);
     }
   };
 
   return (
-    <div className="mt-4 text-sm">
-      {menuItems.map((section) => (
-        <div className="flex flex-col gap-2" key={section.title}>
-          <span className="hidden lg:block text-gray-400 font-light my-4">
-            {section.title}
-          </span>
-          
-          {section.items.map((item) => {
-            // Se for item de logout, renderizar como botão
-            if (item.action === "logout") {
+    <>
+      {/* Mobile menu toggle button */}
+      <button 
+        className="lg:hidden fixed top-4 left-4 z-30 p-2 rounded-md bg-white shadow-md"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label="Toggle menu"
+      >
+        {mobileMenuOpen ? <X size={24} /> : <MenuIcon size={24} />}
+      </button>
+
+      {/* Desktop menu */}
+      <div className="hidden lg:block mt-4 text-sm">
+        {menuItems.map((section) => (
+          <div className="flex flex-col gap-2" key={section.title}>
+            <span className="text-gray-400 font-light my-4">
+              {section.title}
+            </span>
+            
+            {section.items.map((item) => {
+              if (item.action === "logout") {
+                return (
+                  <button
+                    key={item.label}
+                    onClick={handleLogout}
+                    className="flex items-center justify-start gap-4 text-gray-500 py-2 px-2 rounded-md hover:bg-lamaSkyLight w-full text-left"
+                  >
+                    <Image src={item.icon} alt="" width={20} height={20} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              }
+              
               return (
-                <button
+                <Link
+                  href={item.href || "#"}
                   key={item.label}
-                  onClick={handleLogout}
-                  className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight w-full text-left"
+                  className="flex items-center justify-start gap-4 text-gray-500 py-2 px-2 rounded-md hover:bg-lamaSkyLight"
                 >
                   <Image src={item.icon} alt="" width={20} height={20} />
-                  <span className="hidden lg:block">{item.label}</span>
-                </button>
+                  <span>{item.label}</span>
+                </Link>
               );
-            }
-            
-            // Outros itens renderizados como links
-            return (
-              <Link
-                href={item.href || "#"} // Garantir que sempre há um href válido
-                key={item.label}
-                className="flex items-center justify-center lg:justify-start gap-4 text-gray-500 py-2 md:px-2 rounded-md hover:bg-lamaSkyLight"
-              >
-                <Image src={item.icon} alt="" width={20} height={20} />
-                <span className="hidden lg:block">{item.label}</span>
-              </Link>
-            );
-          })}
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile menu - hidden by default */}
+      <div 
+        ref={menuRef}
+        className={`lg:hidden fixed inset-y-0 left-0 z-20 w-64 bg-white shadow-xl transform ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        } transition-transform duration-300 ease-in-out overflow-y-auto`}
+      >
+        <div className="p-4 pt-16 text-sm">
+          {menuItems.map((section) => (
+            <div className="flex flex-col gap-2" key={section.title}>
+              <span className="text-gray-400 font-light my-4">
+                {section.title}
+              </span>
+              
+              {section.items.map((item) => {
+                if (item.action === "logout") {
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={handleLogout}
+                      className="flex items-center gap-4 text-gray-500 py-2 px-2 rounded-md hover:bg-lamaSkyLight w-full text-left"
+                    >
+                      <Image src={item.icon} alt="" width={20} height={20} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                }
+                
+                return (
+                  <Link
+                    href={item.href || "#"}
+                    key={item.label}
+                    className="flex items-center gap-4 text-gray-500 py-2 px-2 rounded-md hover:bg-lamaSkyLight"
+                  >
+                    <Image src={item.icon} alt="" width={20} height={20} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-10"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+    </>
   );
 };
 

@@ -7,12 +7,10 @@ export default function LimparPage() {
   const router = useRouter();
   
   useEffect(() => {
-    // Limpar cookies
     document.cookie.split(";").forEach(c => {
       document.cookie = c.trim().replace(/=.*/, "=;expires=" + new Date(0).toUTCString() + ";path=/");
     });
     
-    // Redirecionar
     setTimeout(() => router.push("/login"), 1000);
   }, [router]);
   

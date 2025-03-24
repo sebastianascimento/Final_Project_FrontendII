@@ -2,8 +2,8 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | SeuApp - Sistema de Gestão',
-    default: 'SeuApp - Sistema de Gestão  de produtos',
+    template: '%s | BizControl - Sistema de Gestão de Produtos',
+    default: 'BizControl - Sistema de Gestão  de produtos',
   },
   description: 'Sistema completo de gestão empresarial. Gerencie pedidos, produtos e clientes em um único lugar.',
   keywords: ['sistema de gestão' , 'ecormece ', 'gestão empresarial' , 'products' , 'pedidos' , 'clientes'],
