@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// [2025-03-13 15:28:28] - sebastianascimento
 
 export const productSchema = z.object({
   id: z.coerce.number().optional(),
@@ -82,7 +81,7 @@ export const supplierSchema = z.object({
   id: z.coerce.number().optional(),
   name: z.string().min(3, { message: "Supplier name is required!" }),
   contact: z.string().optional().or(z.literal("")),
-  companyId: z.string().optional(), // Campo adicionado para relacionamento com empresa
+  companyId: z.string().optional(), 
 });
 
 export type SupplierSchema = z.infer<typeof supplierSchema>;

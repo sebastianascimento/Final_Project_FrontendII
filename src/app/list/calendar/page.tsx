@@ -48,7 +48,7 @@ interface CalendarData {
 }
 
 const CalendarPage = async () => {
-  const currentDateTime = "2025-03-24 11:43:49";
+  const currentDateTime = "2025-03-24 21:07:00";
   const currentUser = "sebastianascimento";
   
   const session = await getServerSession(authOptions);
@@ -84,30 +84,34 @@ const CalendarPage = async () => {
       />
       
       <div className="h-screen flex">
-        <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+        <div className="hidden lg:block w-[10%] xl:w-[12%] p-3">
           <Link
             href="/"
-            className="flex items-center justify-center lg:justify-start gap-2"
+            className="flex items-center justify-start gap-2"
             aria-label="Ir para página inicial"
           >
-            <span className="hidden lg:block font-bold">BizControl</span>
+            <span className="font-bold text-sm xl:text-base">BizControl</span>
           </Link>
           <Menu />
-        </nav>
+        </div>
 
-        <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-6">
+        <div className="lg:hidden">
+          <Menu />
+        </div>
+
+        <main className="w-full lg:w-[90%] xl:w-[88%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
           <header>
             <Navbar />
             <h1 className="sr-only">Calendário de Eventos e Compromissos</h1>
           </header>
 
-          <div className="h-8" aria-hidden="true"></div>
+          <div className="h-4 sm:h-6" aria-hidden="true"></div>
 
-          <section className="m-4 bg-white p-4 rounded-md shadow-lg" aria-labelledby="calendar-heading">
-            <h2 id="calendar-heading" className="text-xl font-bold mb-4">
+          <section className="mx-2 sm:m-4 bg-white p-3 sm:p-4 rounded-md shadow-sm sm:shadow-md" aria-labelledby="calendar-heading">
+            <h2 id="calendar-heading" className="text-lg sm:text-xl font-bold mb-2 sm:mb-4">
               Calendário Empresarial
               {companyName && (
-                <span className="ml-2 text-sm font-normal text-gray-500">({companyName})</span>
+                <span className="ml-2 text-xs sm:text-sm font-normal text-gray-500">({companyName})</span>
               )}
             </h2>
             

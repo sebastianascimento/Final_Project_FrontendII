@@ -2,15 +2,11 @@ import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/app/lib/prisma";
 
-// IMPORTANTE: Este segredo NUNCA deve mudar após definido!
 export const FIXED_JWT_SECRET = "sebastianascimento-segredo-fixo-permanente-1234567890-nao-mudar-nunca";
 
-// DEFINA SUAS CREDENCIAIS DO GOOGLE AQUI
-const GOOGLE_CLIENT_ID = "123456789012-seu-client-id-real.apps.googleusercontent.com"; // SUBSTITUA!
-const GOOGLE_CLIENT_SECRET = "GOCSPX-seu-secret-real"; // SUBSTITUA!
+const GOOGLE_CLIENT_ID = "123456789012-seu-client-id-real.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET = "GOCSPX-seu-secret-real"; 
 
-// Data para logs
-const CURRENT_DATE = "2025-03-13 14:25:59";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -21,10 +17,8 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user }) {
-      console.log(`[${CURRENT_DATE}] User ${user.email} attempting to sign in`);
       
       try {
-        // Verificar se o usuário existe
         const existingUsers = await prisma.$queryRaw`
           SELECT * FROM "User" WHERE email = ${user.email} LIMIT 1
         `;
@@ -33,13 +27,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!existingUser) {
           try {
-            // Criar empresa
             await prisma.$executeRaw`
               INSERT INTO "Company" (name, "createdAt", "updatedAt")
               VALUES (${`${user.name || 'New'}'s Company`}, NOW(), NOW())
             `;
             
-            // Obter ID da empresa
             const companies = await prisma.$queryRaw`
               SELECT id FROM "Company" WHERE name = ${`${user.name || 'New'}'s Company`}
               ORDER BY "createdAt" DESC LIMIT 1
@@ -48,22 +40,18 @@ export const authOptions: NextAuthOptions = {
             if (Array.isArray(companies) && companies.length > 0) {
               const companyId = companies[0].id;
               
-              // Criar usuário
               await prisma.$executeRaw`
                 INSERT INTO "User" (email, name, image, "companyId", role, "createdAt", "updatedAt")
                 VALUES (${user.email}, ${user.name || null}, ${user.image || null}, ${companyId}, 'admin', NOW(), NOW())
               `;
               
-              console.log(`[${CURRENT_DATE}] Created company (ID: ${companyId}) for: ${user.email}`);
             }
           } catch (dbError) {
-            console.error(`[${CURRENT_DATE}] Database error:`, dbError);
           }
         }
         
         return true;
       } catch (error) {
-        console.error(`[${CURRENT_DATE}] Sign in error:`, error);
         return true;
       }
     },
@@ -87,7 +75,6 @@ export const authOptions: NextAuthOptions = {
           }
         }
       } catch (error) {
-        console.error(`[${CURRENT_DATE}] JWT error:`, error);
       }
       
       return token;
@@ -102,7 +89,6 @@ export const authOptions: NextAuthOptions = {
           user.role = token.role;
         }
       } catch (error) {
-        console.error(`[${CURRENT_DATE}] Session error:`, error);
       }
       
       return session;

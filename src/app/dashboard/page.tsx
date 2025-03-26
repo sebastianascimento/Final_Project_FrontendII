@@ -82,11 +82,13 @@ const DashboardPage = async () => {
             <UserCard type="orders" />
             <UserCard type="customers" />
           </div>
-          <div className="flex flex-wrap gap-3 sm:gap-4 mt-6 sm:mt-8 w-full justify-center sm:justify-start">
-            <div className="w-full lg:w-1/2 h-[400px] sm:h-[500px]">
+          
+          <div className="w-full mt-6 sm:mt-8">
+            <div className="w-full h-[500px] sm:h-[600px] md:h-[650px] lg:h-[500px]">
               <OrderChartContainer />
             </div>
           </div>
+          
           <div className="w-full h-[350px] sm:h-[450px] mt-6 sm:mt-8">
             <SalesByBrands />
           </div>

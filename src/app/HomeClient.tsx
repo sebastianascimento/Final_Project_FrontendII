@@ -12,12 +12,9 @@ export default function HomeClient() {
   const { status } = useSession();
   const router = useRouter();
   
-  const currentDate = "2025-03-18 11:32:15";
-  const currentUser = "sebastianascimento";
 
   useEffect(() => {
     if (status === "authenticated") {
-      console.log(`[${currentDate}] @${currentUser} - Usuário já autenticado, redirecionando para o dashboard`);
       router.push("/dashboard");
     }
   }, [status, router]);

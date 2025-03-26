@@ -8,7 +8,6 @@ async function main() {
   try {
     console.log('Tentando conectar ao banco de dados...');
     
-    // Teste simples para verificar a conexão
     const result = await prisma.$queryRaw`SELECT 1 as result`;
     console.log('Conexão bem-sucedida:', result);
     
@@ -16,12 +15,10 @@ async function main() {
     console.error('Erro ao conectar:', error);
     console.error('Detalhes do erro:', error.message);
     
-    // Verificação específica para problemas SSL
     if (error.message.includes('SSL')) {
       console.error('Parece haver um problema com a conexão SSL. Tente modificar as configurações SSL na URL do banco de dados.');
     }
     
-    // Verificação para problemas de credenciais
     if (error.message.includes('password') || error.message.includes('authentication')) {
       console.error('Verifique suas credenciais de acesso ao banco de dados.');
     }

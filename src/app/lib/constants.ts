@@ -30,4 +30,3 @@ export const features = [
         icon: "/path/to/icon2.svg",
     },
   ];
-  

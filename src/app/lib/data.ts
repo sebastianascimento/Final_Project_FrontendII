@@ -44,7 +44,6 @@ export async function getProductsData({
     };
   }
 
-  // Fetch data with Promise.all
   const [products, totalCount, categories, brands, suppliers] = await Promise.all([
     prisma.product.findMany({
       where,

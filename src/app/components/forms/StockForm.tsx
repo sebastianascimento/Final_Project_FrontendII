@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { stockSchema } from "@/app/lib/formValidationSchemas";
 import { createStock, updateStock } from "@/app/lib/actions";
 
@@ -39,15 +39,39 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [newSupplierName, setNewSupplierName] = useState("");
   const [useExistingSupplier, setUseExistingSupplier] = useState(true);
-  const currentDate = "2025-03-24 11:12:13";
+  const currentDate = "2025-03-25 19:21:30";
   const currentUser = "sebastianascimento";
+  
+  // Product selection state
+  const [productInput, setProductInput] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const prevProductInputRef = useRef<string>("");
+  
+  // Supplier selection state
+  const [supplierInput, setSupplierInput] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [isEditingSupplier, setIsEditingSupplier] = useState(false);
+  const prevSupplierInputRef = useRef<string>("");
+
+  // Optimize API URLs
+  const apiUrls = useMemo(() => ({
+    products: "/api/products",
+    suppliers: "/api/suppliers",
+  }), []);
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
 
       try {
-        const productsResponse = await fetch("/api/products");
+        // Fetch data in parallel
+        const [productsResponse, suppliersResponse] = await Promise.all([
+          fetch(apiUrls.products),
+          fetch(apiUrls.suppliers)
+        ]);
+        
+        // Handle products response
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
           
@@ -63,8 +87,8 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
             }
           }
         }
-
-        const suppliersResponse = await fetch("/api/suppliers");
+        
+        // Handle suppliers response
         if (suppliersResponse.ok) {
           const suppliersData = await suppliersResponse.json();
 
@@ -98,7 +122,7 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
     };
 
     fetchData();
-  }, []);
+  }, [apiUrls]);
 
   const {
     register,
@@ -117,9 +141,129 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
   });
 
   const selectedProductId = watch("productId");
+  const selectedSupplierId = watch("supplierId");
+
+  // Improved product input change handler
+  const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    setProductInput(input);
+    
+    if (!input) {
+      setSelectedProduct(null);
+      setValue("productId", 0);
+      prevProductInputRef.current = "";
+      return;
+    }
+    
+    // Always check for exact match regardless of deletion or typing
+    const normalizedInput = input.toLowerCase().trim();
+    const exactMatch = products.find(
+      p => p.name.toLowerCase().trim() === normalizedInput
+    );
+    
+    // Always check if we no longer match the currently selected product
+    if (selectedProduct && selectedProduct.name.toLowerCase().trim() !== normalizedInput) {
+      // If we don't have an exact match with the new input
+      if (!exactMatch) {
+        // Clear selection if user is actively editing or if no partial matches
+        if (isEditingProduct || !products.some(p => p.name.toLowerCase().includes(normalizedInput))) {
+          setSelectedProduct(null);
+          setValue("productId", 0);
+        }
+      }
+    }
+    
+    // Check if user is deleting characters
+    const isDeletion = input.length < prevProductInputRef.current.length;
+    prevProductInputRef.current = input;
+    
+    // If we have an exact match, always set it
+    if (exactMatch) {
+      setSelectedProduct(exactMatch);
+      setValue("productId", exactMatch.id);
+      return;
+    }
+
+    // For partial matches, only autocomplete when adding characters (not deleting)
+    if (!isDeletion && !isEditingProduct) {
+      const partialMatch = products.find(
+        p => p.name.toLowerCase().trim().includes(normalizedInput)
+      );
+      
+      if (partialMatch) {
+        setSelectedProduct(partialMatch);
+        setValue("productId", partialMatch.id);
+        
+        // Autocomplete the input field
+        setProductInput(partialMatch.name);
+        prevProductInputRef.current = partialMatch.name;
+      } else {
+        setSelectedProduct(null);
+        setValue("productId", 0);
+      }
+    }
+  };
+  
+  // Handle supplier input change - similarly improved
+  const handleSupplierInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    setSupplierInput(input);
+    
+    if (!input) {
+      setSelectedSupplier(null);
+      setValue("supplierId", 0);
+      prevSupplierInputRef.current = "";
+      return;
+    }
+    
+    // Always check for exact match
+    const normalizedInput = input.toLowerCase().trim();
+    const exactMatch = suppliers.find(
+      s => s.name.toLowerCase().trim() === normalizedInput
+    );
+    
+    // Always check if we no longer match the currently selected supplier
+    if (selectedSupplier && selectedSupplier.name.toLowerCase().trim() !== normalizedInput) {
+      if (!exactMatch) {
+        if (isEditingSupplier || !suppliers.some(s => s.name.toLowerCase().includes(normalizedInput))) {
+          setSelectedSupplier(null);
+          setValue("supplierId", 0);
+        }
+      }
+    }
+    
+    // Check if user is deleting characters
+    const isDeletion = input.length < prevSupplierInputRef.current.length;
+    prevSupplierInputRef.current = input;
+    
+    // If we have an exact match, always set it
+    if (exactMatch) {
+      setSelectedSupplier(exactMatch);
+      setValue("supplierId", exactMatch.id);
+      return;
+    }
+    
+    // For partial matches, only autocomplete when adding characters (not deleting)
+    if (!isDeletion && !isEditingSupplier) {
+      const partialMatch = suppliers.find(
+        s => s.name.toLowerCase().trim().includes(normalizedInput)
+      );
+      
+      if (partialMatch) {
+        setSelectedSupplier(partialMatch);
+        setValue("supplierId", partialMatch.id);
+        
+        setSupplierInput(partialMatch.name);
+        prevSupplierInputRef.current = partialMatch.name;
+      } else {
+        setSelectedSupplier(null);
+        setValue("supplierId", 0);
+      }
+    }
+  };
 
   useEffect(() => {
-    if (type === "update" && data) {
+    if (type === "update" && data && !isLoading) {
       reset({
         id: data.id,
         productId: data.productId || 0,
@@ -128,17 +272,34 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
       });
 
       setUseExistingSupplier(true);
+      
+      // Find and set the product for the display
+      if (data.productId && products.length > 0) {
+        const product = products.find(p => p.id === data.productId);
+        if (product) {
+          setProductInput(product.name);
+          setSelectedProduct(product);
+          prevProductInputRef.current = product.name;
+        }
+      }
+      
+      // Find and set the supplier for the display
+      if (data.supplierId && suppliers.length > 0) {
+        const supplier = suppliers.find(s => s.id === data.supplierId);
+        if (supplier) {
+          setSupplierInput(supplier.name);
+          setSelectedSupplier(supplier);
+          prevSupplierInputRef.current = supplier.name;
+        }
+      }
     }
-  }, [data, reset, type]);
+  }, [data, reset, type, products, suppliers, isLoading]);
 
   const onSubmit = handleSubmit(async (formData) => {
     setIsSubmitting(true);
     setFormState({ success: false, error: false, errorMessage: "" });
 
     try {
-      const timestamp = "2025-03-24 11:12:13";
-      const username = "sebastianascimento";
-      
       const stockData: any = { ...formData };
 
       if (!useExistingSupplier && newSupplierName.trim()) {
@@ -221,26 +382,61 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
             Product
           </label>
           
-          <select
-            id="productId"
-            className="border border-gray-300 p-2 rounded-md w-full"
-            {...register("productId", { valueAsNumber: true })}
-            disabled={!Array.isArray(products) || products.length === 0}
-          >
-            <option value="">Select a product</option>
-            {Array.isArray(products) ? (
-              products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name} {product.price ? `($${product.price})` : ""}
-                </option>
-              ))
-            ) : (
-              <option value="">Loading products...</option>
-            )}
-          </select>
+          {/* Replace select with input + datalist for better typing experience */}
+          <div>
+            <input
+              id="productInput"
+              type="text"
+              className={`border ${
+                errors?.productId ? "border-red-500" : selectedProduct ? "border-green-500" : "border-gray-300"
+              } p-2 rounded-md w-full`}
+              placeholder="Enter or select a product"
+              list="product-options"
+              value={productInput}
+              onChange={handleProductInputChange}
+              onFocus={() => setIsEditingProduct(true)}
+              onBlur={() => {
+                setIsEditingProduct(false);
+                // Validate match on blur
+                const exactMatch = products.find(
+                  p => p.name.toLowerCase().trim() === productInput.toLowerCase().trim()
+                );
+                if (!exactMatch) {
+                  setSelectedProduct(null);
+                  setValue("productId", 0);
+                }
+              }}
+              disabled={!Array.isArray(products) || products.length === 0}
+            />
+            <datalist id="product-options">
+              {Array.isArray(products) && products.length > 0 ? (
+                products.map((product) => (
+                  <option key={product.id} value={product.name}>
+                    {product.price ? `$${product.price}` : ""}
+                  </option>
+                ))
+              ) : null}
+            </datalist>
+            <input type="hidden" {...register("productId", { valueAsNumber: true })} />
+          </div>
+          
           {errors?.productId && (
             <span className="text-red-500 text-sm">
               {errors.productId.message as string}
+            </span>
+          )}
+          
+          {/* Feedback for product selection */}
+          {productInput && !selectedProduct && !isLoading && (
+            <span className="text-yellow-500 text-xs">
+              Product not found. Check the name or add a new product.
+            </span>
+          )}
+          
+          {selectedProduct && (
+            <span className="text-green-600 text-xs">
+              Product found: {selectedProduct.name} 
+              {selectedProduct.price ? ` ($${selectedProduct.price})` : ''}
             </span>
           )}
         </div>
@@ -276,24 +472,62 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
             )}
 
           {useExistingSupplier ? (
-            <select
-              id="supplierId"
-              className="border border-gray-300 p-2 rounded-md"
-              {...register("supplierId", { valueAsNumber: true })}
-              disabled={!Array.isArray(suppliers) || suppliers.length === 0}
-            >
-              <option value="">Select a supplier</option>
-              {Array.isArray(suppliers) ? (
-                suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name}{" "}
-                    {supplier.contact ? `(${supplier.contact})` : ""}
-                  </option>
-                ))
-              ) : (
-                <option value="">Loading suppliers...</option>
+            <div>
+              <input
+                id="supplierInput"
+                type="text"
+                className={`border ${
+                  errors?.supplierId ? "border-red-500" : selectedSupplier ? "border-green-500" : "border-gray-300"
+                } p-2 rounded-md w-full`}
+                placeholder="Enter or select a supplier"
+                list="supplier-options"
+                value={supplierInput}
+                onChange={handleSupplierInputChange}
+                onFocus={() => setIsEditingSupplier(true)}
+                onBlur={() => {
+                  setIsEditingSupplier(false);
+                  // Validate match on blur
+                  const exactMatch = suppliers.find(
+                    s => s.name.toLowerCase().trim() === supplierInput.toLowerCase().trim()
+                  );
+                  if (!exactMatch) {
+                    setSelectedSupplier(null);
+                    setValue("supplierId", 0);
+                  }
+                }}
+                disabled={!Array.isArray(suppliers) || suppliers.length === 0}
+              />
+              <datalist id="supplier-options">
+                {Array.isArray(suppliers) && suppliers.length > 0 ? (
+                  suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.name}>
+                      {supplier.contact ? `(${supplier.contact})` : ""}
+                    </option>
+                  ))
+                ) : null}
+              </datalist>
+              <input type="hidden" {...register("supplierId", { valueAsNumber: true })} />
+              
+              {errors?.supplierId && (
+                <span className="text-red-500 text-sm">
+                  {errors.supplierId.message as string}
+                </span>
               )}
-            </select>
+              
+              {/* Feedback for supplier selection */}
+              {supplierInput && !selectedSupplier && !isLoading && (
+                <span className="text-yellow-500 text-xs">
+                  Supplier not found. Check the name or add a new supplier.
+                </span>
+              )}
+              
+              {selectedSupplier && (
+                <span className="text-green-600 text-xs">
+                  Supplier found: {selectedSupplier.name}
+                  {selectedSupplier.contact ? ` (${selectedSupplier.contact})` : ''}
+                </span>
+              )}
+            </div>
           ) : (
             <input
               type="text"
@@ -302,12 +536,6 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
               value={newSupplierName}
               onChange={(e) => setNewSupplierName(e.target.value)}
             />
-          )}
-
-          {useExistingSupplier && errors?.supplierId && (
-            <span className="text-red-500 text-sm">
-              {errors.supplierId.message as string}
-            </span>
           )}
 
           {!useExistingSupplier && !newSupplierName.trim() && (
@@ -369,9 +597,9 @@ const StockForm = ({ type, data, setOpen }: StockFormProps) => {
           isSubmitting
             ? "bg-gray-400"
             : type === "create"
-            ? "bg-blue-400"
-            : "bg-green-500"
-        } text-white p-2 rounded-md`}
+            ? "bg-blue-500 hover:bg-blue-600"
+            : "bg-green-500 hover:bg-green-600"
+        } text-white p-2 rounded-md transition-colors`}
         disabled={
           isSubmitting || (!useExistingSupplier && !newSupplierName.trim())
         }

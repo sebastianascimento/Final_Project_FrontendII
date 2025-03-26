@@ -5,7 +5,6 @@ import Menu from "../../components/dashboard/Menu";
 import Navbar from "../../components/dashboard/Navbar";
 import TableSearch from "../../components/products/TableSearch";
 import Pagination from "@/app/components/products/Pagination";
-// Mantendo o import do Image caso seja usado em outros lugares
 import Image from "next/image";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -56,7 +55,6 @@ interface ProductItem {
   "@type": string;
   name: string;
   description: string;
-  // Removido o campo image
   offers: ProductOffer;
 }
 
@@ -75,7 +73,6 @@ interface ProductListData {
   itemListOrder: string;
   itemListElement: ListItem[];
 }
-
 
 async function getSearchParams(params: any) {
   return params;
@@ -142,7 +139,6 @@ async function getProductsData(
 }
 
 export default async function ProductsPage({ searchParams }: PageProps) {
-  // First, get session data
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -154,25 +150,21 @@ export default async function ProductsPage({ searchParams }: PageProps) {
   }
 
   const companyId = session.user.companyId;
-
-  // This is the key fix - await the searchParams using the helper function
   const awaitedParams = await getSearchParams(searchParams);
   const pageValue = awaitedParams.page || "1";
   const searchValue = awaitedParams.search || "";
   
-  // Structured data for product catalog page with proper type
   const jsonLdData: ProductListData = {
     "@context": "https://schema.org",
     "@type": "ItemList",
     "name": "Catálogo de Produtos",
     "description": "Lista de produtos disponíveis em nosso sistema",
-    "numberOfItems": 0, // Will be updated in the try block if successful
+    "numberOfItems": 0,
     "itemListOrder": "Ascending",
-    "itemListElement": [] // Initialize as empty array
+    "itemListElement": []
   };
   
   try {
-    // Pass the extracted values to the function
     const { 
       products, 
       totalCount, 
@@ -184,10 +176,8 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       searchValue
     );
 
-    // Update the structured data with actual product count and items
     jsonLdData.numberOfItems = totalCount;
     
-    // Type-safe mapping of products to ListItem array - sem o campo image
     const itemListElements: ListItem[] = products.map((product, index) => ({
       "@type": "ListItem",
       "position": index + 1,
@@ -203,55 +193,102 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       }
     }));
     
-    // Assign the properly typed array
     jsonLdData.itemListElement = itemListElements;
 
     return (
       <>
-        {/* Add structured data script for better search results */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
         />
         
         <div className="h-screen flex">
-          {/* LEFT - Sidebar */}
-          <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+          {/* Sidebar - hidden on mobile */}
+          <div className="hidden lg:block w-[16%] xl:w-[14%] p-4">
             <Link
               href="/"
-              className="flex items-center justify-center lg:justify-start gap-2"
+              className="flex items-center justify-start gap-2"
               aria-label="Ir para página inicial"
             >
-              <span className="hidden lg:block font-bold">BizControl</span>
+              <span className="font-bold">BizControl</span>
             </Link>
             <Menu />
-          </nav>
+          </div>
 
-          {/* RIGHT - Main content - Added pt-8 to move content down */}
-          <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-8">
+          {/* Mobile menu container */}
+          <div className="lg:hidden">
+            <Menu />
+          </div>
+
+          {/* Main content area - full width on mobile */}
+          <main className="w-full lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
             <header>
               <Navbar />
             </header>
             
-            {/* Added more space after the header - 64px of space */}
             <div className="h-6" aria-hidden="true"></div>
 
-            {/* Added more top margin to move content down */}
-            <section className="bg-white p-4 rounded-md flex-1 m-4 mt-12">
-              <div className="flex items-center justify-between">
-                <h1 className="hidden md:block text-lg font-semibold">
+            <section className="bg-white p-3 sm:p-4 rounded-md flex-1 mx-auto w-full max-w-screen-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h1 className="text-lg font-semibold text-center sm:text-left">
                   All Products
                 </h1>
-                <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
                   <TableSearch initialValue={searchTerm} />
-                  <div className="flex items-center gap-4 self-end">
+                  <div className="flex items-center gap-3 sm:gap-4 self-center sm:self-end">
                     <FormModal table="product" type="create" />
                   </div>
                 </div>
               </div>
 
-              {/* Products Table */}
-              <div className="mt-6 overflow-x-auto">
+              {/* Mobile view for products - card style layout */}
+              <div className="mt-4 block sm:hidden">
+                {products.length === 0 ? (
+                  <div className="text-center p-4 bg-gray-50 rounded-md">
+                    <p className="text-gray-500">
+                      Nenhum produto encontrado
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {products.map((product) => (
+                      <div key={product.id} className="bg-gray-50 p-3 rounded-md">
+                        <div className="mb-2">
+                          <div className="font-semibold text-gray-900">{product.name}</div>
+                          <div className="text-sm text-gray-500 line-clamp-2">
+                            {product.description || "Sem descrição"}
+                          </div>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-gray-500">Price:</span> ${Number(product.price).toFixed(2)}</p>
+                          {product.category?.name && (
+                            <p><span className="text-gray-500">Category:</span> {product.category.name}</p>
+                          )}
+                          {product.brand?.name && (
+                            <p><span className="text-gray-500">Brand:</span> {product.brand.name}</p>
+                          )}
+                        </div>
+                        <div className="flex justify-end gap-2 mt-3">
+                          <FormModal
+                            table="product"
+                            type="update"
+                            data={product}
+                            id={product.id}
+                          />
+                          <FormModal
+                            table="product"
+                            type="delete"
+                            id={product.id}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop view for products - table layout */}
+              <div className="mt-6 overflow-x-auto hidden sm:block">
                 <table className="min-w-full divide-y divide-gray-200" aria-label="Lista de Produtos">
                   <thead className="bg-gray-50">
                     <tr>
@@ -261,10 +298,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                       <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Price
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Category
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Brand
                       </th>
                       <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
@@ -292,7 +329,6 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                         >
                           <td className="p-4">
                             <div>
-                              {/* Removida a div da imagem */}
                               <div className="text-sm font-medium text-gray-900">
                                 {product.name}
                               </div>
@@ -304,10 +340,10 @@ export default async function ProductsPage({ searchParams }: PageProps) {
                           <td className="p-4">
                             $ {Number(product.price).toFixed(2)}
                           </td>
-                          <td className="p-4 hidden md:table-cell">
+                          <td className="p-4">
                             {product.category?.name || "N/A"}
                           </td>
-                          <td className="p-4 hidden md:table-cell">
+                          <td className="p-4">
                             {product.brand?.name || "N/A"}
                           </td>
                           <td className="p-4 hidden lg:table-cell">
@@ -364,4 +400,4 @@ export default async function ProductsPage({ searchParams }: PageProps) {
       </div>
     );
   }
-}   
+}

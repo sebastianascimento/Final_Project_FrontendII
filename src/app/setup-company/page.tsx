@@ -23,7 +23,6 @@ export default function SetupCompanyPage() {
     setError("");
     
     try {
-      // Enviar requisição para criar empresa
       const response = await fetch("/api/company/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,9 +35,7 @@ export default function SetupCompanyPage() {
         throw new Error(data.message || "Erro ao configurar empresa");
       }
       
-      console.log("[2025-03-14 11:57:03] @sebastianascimento - Empresa configurada:", data);
       
-      // Atualizar a sessão do usuário
       await update({
         ...session,
         user: {
@@ -49,10 +46,8 @@ export default function SetupCompanyPage() {
         }
       });
       
-      // Redirecionar para dashboard
       router.push("/dashboard");
     } catch (err) {
-      console.error("[2025-03-14 11:57:03] Erro:", err);
       setError(err instanceof Error ? err.message : "Erro desconhecido");
       setLoading(false);
     }

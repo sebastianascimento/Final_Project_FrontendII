@@ -12,6 +12,10 @@ import {
   AlertCircle,
   RefreshCcw,
   Building,
+  Package,
+  Clock,
+  FileText,
+  X
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 
@@ -48,6 +52,110 @@ interface ToolbarProps {
   companyName?: string;
 }
 
+// Delivery Details Modal Component
+interface DeliveryModalProps {
+  event: CalendarDeliveryEvent | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const DeliveryDetailsModal = ({ event, isOpen, onClose }: DeliveryModalProps) => {
+  if (!isOpen || !event) return null;
+  
+  const statusColors: { [key: string]: string } = {
+    pending: "bg-amber-100 text-amber-800 border-amber-200",
+    shipped: "bg-blue-100 text-blue-800 border-blue-200",
+    delivered: "bg-green-100 text-green-800 border-green-200",
+    delayed: "bg-red-100 text-red-800 border-red-200",
+    processing: "bg-purple-100 text-purple-800 border-purple-200"
+  };
+
+  const defaultStatusClass = "bg-gray-100 text-gray-800 border-gray-200";
+  const statusClass = event.shippingStatus && statusColors[event.shippingStatus.toLowerCase()] 
+    ? statusColors[event.shippingStatus.toLowerCase()]
+    : defaultStatusClass;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto overflow-hidden">
+        <div className="flex justify-between items-center border-b border-gray-200 p-4">
+          <h3 className="text-lg font-semibold text-gray-800">Detalhes da Entrega</h3>
+          <button 
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 focus:outline-none"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-1">
+              <Package size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Produto</p>
+              <p className="font-medium">{event.productName}</p>
+            </div>
+          </div>
+          
+          <div className="flex items-start gap-3">
+            <div className="mt-1">
+              <Clock size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Entrega Estimada</p>
+              <p className="font-medium">
+                {new Date(event.estimatedDelivery).toLocaleDateString()} às {' '}
+                {new Date(event.estimatedDelivery).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+          
+          {event.carrier && (
+            <div className="flex items-start gap-3">
+              <div className="mt-1">
+                <Truck size={20} className="text-blue-500" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Transportadora</p>
+                <p className="font-medium">{event.carrier}</p>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex items-start gap-3">
+            <div className="mt-1">
+              <FileText size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Número do Pedido</p>
+              <p className="font-medium">{event.orderNumber}</p>
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <div className="text-sm text-gray-500 mb-1">Status</div>
+            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium border ${statusClass}`}>
+              {event.shippingStatus}
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 px-4 py-3 flex justify-end border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CustomToolbar = (toolbar: ToolbarProps) => {
   const goToBack = () => {
     toolbar.onNavigate("PREV");
@@ -64,11 +172,11 @@ const CustomToolbar = (toolbar: ToolbarProps) => {
   const label = () => {
     const date = moment(toolbar.date);
     return (
-      <span className="text-lg font-medium text-gray-800">
+      <span className="text-sm md:text-lg font-medium text-gray-800">
         {date.format("MMMM")}{" "}
         <span className="font-bold">{date.format("YYYY")}</span>
         {toolbar.companyName && (
-          <span className="text-sm font-normal text-gray-500 ml-2">
+          <span className="text-xs md:text-sm font-normal text-gray-500 ml-2">
             ({toolbar.companyName})
           </span>
         )}
@@ -84,39 +192,39 @@ const CustomToolbar = (toolbar: ToolbarProps) => {
   }, []);
 
   return (
-    <div className="flex justify-between items-center p-4 bg-white border-b border-gray-200">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col md:flex-row md:justify-between items-center p-2 md:p-4 bg-white border-b border-gray-200">
+      <div className="flex items-center gap-2 mb-2 md:mb-0">
         <button
           type="button"
           onClick={goToBack}
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-1 md:p-2 rounded-full hover:bg-gray-100 transition-colors"
         >
-          <ChevronLeft size={20} className="text-gray-600" />
+          <ChevronLeft size={18} className="text-gray-600" />
         </button>
         <button
           type="button"
           onClick={goToCurrent}
-          className="flex items-center px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+          className="flex items-center px-2 py-1 md:px-3 md:py-1.5 text-xs md:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
         >
-          <CalendarIcon size={16} className="mr-1 text-blue-500" />
+          <CalendarIcon size={14} className="mr-1 text-blue-500" />
           <span>Today</span>
         </button>
         <button
           type="button"
           onClick={goToNext}
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-1 md:p-2 rounded-full hover:bg-gray-100 transition-colors"
         >
-          <ChevronRight size={20} className="text-gray-600" />
+          <ChevronRight size={18} className="text-gray-600" />
         </button>
       </div>
-      <div>{label()}</div>
-      <div className="flex gap-2">
+      <div className="mb-2 md:mb-0">{label()}</div>
+      <div className="flex gap-1 md:gap-2">
         {toolbar.views.map((view: View) => (
           <button
             key={view}
             type="button"
             onClick={() => toolbar.onView(view)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            className={`px-2 py-1 md:px-3 md:py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors ${
               view === toolbar.view
                 ? "bg-blue-500 text-white"
                 : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
@@ -157,18 +265,18 @@ const DeliveryEventComponent = ({ event }: EventComponentProps) => {
       className={`h-full p-1.5 rounded text-white ${colorClass} hover:brightness-110 transition-all`}
     >
       <div className="flex items-center gap-1">
-        <Truck size={14} />
-        <div className="font-medium text-xs md:text-sm truncate">
+        <Truck size={14} className="flex-shrink-0" />
+        <div className="font-medium text-xs md:text-sm break-words">
           {event.productName}
         </div>
       </div>
       {event.customerName !== "Cliente" && (
-        <div className="text-xs opacity-90 truncate">
+        <div className="text-xs opacity-90 break-words">
           Cliente: {event.customerName}
         </div>
       )}
       {carrierInfo && (
-        <div className="text-xs opacity-90 truncate">{carrierInfo}</div>
+        <div className="text-xs opacity-90 break-words">{carrierInfo}</div>
       )}
     </div>
   );
@@ -190,10 +298,13 @@ const MonthDeliveryEventWrapper = ({ event }: EventComponentProps) => {
       : defaultColor;
 
   return (
-    <div className={`p-1 rounded text-white ${colorClass}`}>
-      <span className="text-xs truncate flex items-center gap-0.5">
-        <Truck size={10} />
-        <span>{event.productName}</span>
+    <div 
+      className={`p-1 rounded text-white ${colorClass} hover:bg-opacity-90`}
+      title={event.productName} // Add tooltip to show full name on hover
+    >
+      <span className="text-xs flex items-center gap-0.5 min-w-0">
+        <Truck size={10} className="flex-shrink-0" />
+        <span className="whitespace-normal break-words">{event.productName}</span>
       </span>
     </div>
   );
@@ -261,6 +372,39 @@ const calendarGlobalStyles = `
   .rbc-row-content {
     @apply z-0;
   }
+  
+  /* Mobile Responsive Fixes */
+  @media (max-width: 640px) {
+    .rbc-btn-group {
+      margin: 2px;
+    }
+    .rbc-toolbar-label {
+      padding: 0;
+      margin: 4px 0;
+    }
+    .rbc-toolbar button {
+      padding: 4px 6px;
+      font-size: 0.8rem;
+    }
+    .rbc-header {
+      padding: 8px 2px;
+      font-size: 0.75rem;
+    }
+    .rbc-date-cell > a {
+      font-size: 0.75rem;
+    }
+    .rbc-event {
+      min-height: 26px;
+      word-break: break-word;
+    }
+    .rbc-event-content {
+      height: auto !important;
+      white-space: normal !important;
+    }
+    .rbc-events-container {
+      margin-right: 0 !important;
+    }
+  }
 `;
 
 interface ApiDeliveryData {
@@ -285,9 +429,12 @@ const BigCalendar = () => {
   const [deliveryData, setDeliveryData] = useState<DeliveryEvent[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
-  const [noCompanyConfigured, setNoCompanyConfigured] =
-    useState<boolean>(false);
+  const [noCompanyConfigured, setNoCompanyConfigured] = useState<boolean>(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  
+  // Modal state
+  const [selectedEvent, setSelectedEvent] = useState<CalendarDeliveryEvent | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   const handleNavigate = (action: "PREV" | "NEXT" | "TODAY" | Date) => {
     if (action === "PREV") {
@@ -354,6 +501,7 @@ const BigCalendar = () => {
 
       setDeliveryData(formattedData);
     } catch (err) {
+      console.error(`[2025-03-24 21:33:41] @sebastianascimento - Error fetching delivery data:`, err);
       setError(err instanceof Error ? err : new Error("Erro desconhecido"));
       setDeliveryData([]);
     } finally {
@@ -391,6 +539,18 @@ const BigCalendar = () => {
       end: new Date(delivery.estimatedDelivery.getTime() + 60 * 60 * 1000),
     }));
   }, [deliveryData]);
+
+  // New event selection handler to open modal instead of alert
+  const handleSelectEvent = (event: CalendarDeliveryEvent) => {
+    setSelectedEvent(event);
+    setIsModalOpen(true);
+  };
+
+  // Modal close handler
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedEvent(null);
+  };
 
   if (status === "loading") {
     return (
@@ -487,25 +647,6 @@ const BigCalendar = () => {
     );
   }
 
-  const handleSelectEvent = (event: CalendarDeliveryEvent) => {
-    alert(`
-      Produto: ${event.productName}
-      Entrega estimada: ${new Date(
-        event.estimatedDelivery
-      ).toLocaleDateString()} às ${new Date(
-      event.estimatedDelivery
-    ).toLocaleTimeString()}
-      Status: ${event.shippingStatus}
-      ${
-        event.address !== "Endereço de entrega"
-          ? `Endereço: ${event.address}`
-          : ""
-      }
-      ${event.orderNumber}
-      ${event.carrier ? `Transportadora: ${event.carrier}` : ""}
-    `);
-  };
-
   const calendarComponents: any = {
     toolbar: (props: any) => (
       <CustomToolbar {...props} companyName={companyName} />
@@ -517,47 +658,56 @@ const BigCalendar = () => {
   };
 
   return (
-    <div
-      className="flex flex-col bg-white rounded-lg shadow-sm overflow-hidden"
-      style={{ height: calendarHeight }}
-    >
-      <style jsx global>
-        {calendarGlobalStyles}
-      </style>
+    <>
+      <div
+        className="flex flex-col bg-white rounded-lg shadow-sm overflow-hidden"
+        style={{ height: calendarHeight }}
+      >
+        <style jsx global>
+          {calendarGlobalStyles}
+        </style>
 
-      <div className="p-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-        <div className="flex items-center">
-          <Truck size={18} className="text-blue-500 mr-2" />
-          <h2 className="text-sm font-medium text-blue-800">
-            Calendário de Entregas
-          </h2>
+        <div className="p-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+          <div className="flex items-center">
+            <Truck size={18} className="text-blue-500 mr-2" />
+            <h2 className="text-xs sm:text-sm font-medium text-blue-800">
+              Calendário de Entregas
+            </h2>
+          </div>
+          <div className="text-xs text-blue-600">
+            {deliveryEvents.length} entregas agendadas
+          </div>
         </div>
-        <div className="text-xs text-blue-600">
-          {deliveryEvents.length} entregas agendadas
-        </div>
+
+        <Calendar
+          localizer={localizer}
+          events={deliveryEvents}
+          startAccessor="start"
+          endAccessor="end"
+          views={allViews}
+          view={view}
+          date={currentDate}
+          onNavigate={handleNavigate}
+          className="flex-1"
+          onView={handleOnChangeView}
+          components={calendarComponents}
+          formats={{
+            timeGutterFormat: (date: Date) => moment(date).format("h:mm A"),
+            dayFormat: (date: Date) => moment(date).format("ddd DD"),
+            monthHeaderFormat: (date: Date) => moment(date).format("MMMM YYYY"),
+          }}
+          popup={true}
+          onSelectEvent={handleSelectEvent}
+        />
       </div>
 
-      <Calendar
-        localizer={localizer}
-        events={deliveryEvents}
-        startAccessor="start"
-        endAccessor="end"
-        views={allViews}
-        view={view}
-        date={currentDate}
-        onNavigate={handleNavigate}
-        className="flex-1"
-        onView={handleOnChangeView}
-        components={calendarComponents}
-        formats={{
-          timeGutterFormat: (date: Date) => moment(date).format("h:mm A"),
-          dayFormat: (date: Date) => moment(date).format("ddd DD"),
-          monthHeaderFormat: (date: Date) => moment(date).format("MMMM YYYY"),
-        }}
-        popup={true}
-        onSelectEvent={handleSelectEvent}
+      {/* Delivery Details Modal */}
+      <DeliveryDetailsModal 
+        event={selectedEvent} 
+        isOpen={isModalOpen} 
+        onClose={handleCloseModal} 
       />
-    </div>
+    </>
   );
 };
 

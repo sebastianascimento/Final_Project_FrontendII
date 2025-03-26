@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import InputField from "../InputField";
 import { orderSchema } from "@/app/lib/formValidationSchemas";
@@ -11,6 +11,7 @@ import { createOrder, updateOrder } from "@/app/lib/actions";
 import { Loader, AlertCircle, CheckCircle } from "lucide-react";
 
 type OrderInputs = z.infer<typeof orderSchema>;
+type OrderStatus = "PENDING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 
 interface Product {
   id: number;
@@ -31,6 +32,11 @@ interface FormState {
   errorMessage: string;
 }
 
+interface StatusOption {
+  value: OrderStatus;
+  label: string;
+}
+
 const OrderForm = ({
   type,
   data,
@@ -42,8 +48,6 @@ const OrderForm = ({
 }) => {
   const { data: session } = useSession();
   const companyId = session?.user?.companyId;
-  const currentDate = "2025-03-24 14:21:04";
-  const currentUser = "sebastianascimento";
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState<FormState>({
@@ -63,6 +67,16 @@ const OrderForm = ({
   });
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const prevProductNameRef = useRef<string>("");
+  
+  // Status options with proper typing
+  const statusOptions: StatusOption[] = [
+    { value: "PENDING", label: "PENDING" },
+    { value: "SHIPPED", label: "SHIPPED" },
+    { value: "DELIVERED", label: "DELIVERED" },
+    { value: "CANCELLED", label: "CANCELLED" }
+  ];
 
   const {
     register,
@@ -78,6 +92,7 @@ const OrderForm = ({
   const quantity = watch("quantity");
   const productName = watch("product");
   const customerName = watch("customer");
+  const statusValue = watch("status") || "PENDING";
 
   const totalAmount = useMemo(() => {
     if (selectedProduct?.price && quantity) {
@@ -140,13 +155,33 @@ const OrderForm = ({
     fetchCompanyData();
   }, [companyId]);
 
+  // Modified effect to allow deleting characters
   useEffect(() => {
-    if (!productName || !apiData.isLoaded) return;
+    if (!productName || !apiData.isLoaded) {
+      setSelectedProduct(null);
+      prevProductNameRef.current = productName || "";
+      return;
+    }
 
     const normalizedInput = productName.toLowerCase().trim();
-    
     const productsArray = Array.isArray(apiData.products) ? apiData.products : [];
     
+    // Check if user is typing or deleting
+    const isDeletion = productName.length < prevProductNameRef.current.length;
+    prevProductNameRef.current = productName;
+    
+    // Allow deletion without trying to match
+    if (isDeletion) {
+      // If deleting, we need to update the selected product based on what's left
+      const matchingProduct = productsArray.find(
+        p => p.name.toLowerCase() === normalizedInput
+      );
+      
+      setSelectedProduct(matchingProduct || null);
+      return;
+    }
+    
+    // Only auto-complete when not actively editing
     const product =
       productsArray.find(
         (p) => p.name.toLowerCase().trim() === normalizedInput
@@ -157,10 +192,11 @@ const OrderForm = ({
 
     setSelectedProduct(product || null);
 
-    if (product && product.name.toLowerCase().trim() !== normalizedInput) {
+    // Only auto-complete if extending the name (not if deleting)
+    if (product && product.name.toLowerCase().trim() !== normalizedInput && !isEditingProduct) {
       setValue("product", product.name);
     }
-  }, [productName, apiData.products, apiData.isLoaded, setValue]);
+  }, [productName, apiData.products, apiData.isLoaded, setValue, isEditingProduct]);
 
   useEffect(() => {
     if (type === "update" && data && apiData.isLoaded) {
@@ -180,12 +216,14 @@ const OrderForm = ({
         customer: customerMatch?.name || data.customer?.name || "",
         address: data.address || "",
         quantity: data.quantity,
-        status: data.status,
+        status: data.status as OrderStatus,
       });
 
       if (productMatch) {
         setSelectedProduct(productMatch);
       }
+      
+      prevProductNameRef.current = productMatch?.name || data.product?.name || "";
     }
   }, [
     data,
@@ -269,6 +307,11 @@ const OrderForm = ({
     }
   });
 
+  // Handle status change with proper typing
+  const handleStatusChange = (status: OrderStatus) => {
+    setValue("status", status, { shouldDirty: true });
+  };
+
   if (!companyId) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-md">
@@ -335,6 +378,12 @@ const OrderForm = ({
               list="product-options"
               placeholder="Select or type product name"
               disabled={isLoading}
+              onFocus={() => setIsEditingProduct(true)}
+              onBlur={() => setIsEditingProduct(false)}
+              onChange={(e) => {
+                // This ensures the React Hook Form registers the change
+                register("product").onChange(e);
+              }}
             />
             <datalist id="product-options">
               {Array.isArray(apiData?.products) ? (
@@ -456,21 +505,34 @@ const OrderForm = ({
           )}
         </div>
 
+        {/* Custom radio buttons styled as a button group for Order Status */}
         <div className="flex flex-col gap-2">
-          <label htmlFor="status" className="text-gray-700 font-medium text-sm">
+          <label className="text-gray-700 font-medium text-sm">
             Order Status
           </label>
-          <select
-            id="status"
-            className="border border-gray-300 p-2 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            {...register("status")}
-            disabled={isLoading}
-          >
-            <option value="PENDING">PENDING</option>
-            <option value="SHIPPED">SHIPPED</option>
-            <option value="DELIVERED">DELIVERED</option>
-            <option value="CANCELLED">CANCELLED</option>
-          </select>
+          
+          {/* Hidden actual form field */}
+          <input type="hidden" {...register("status")} />
+          
+          {/* Button group component */}
+          <div className="grid grid-cols-2 gap-2">
+            {statusOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleStatusChange(option.value)}
+                className={`px-2 py-1.5 text-xs sm:text-sm rounded-md border transition-colors ${
+                  statusValue === option.value
+                    ? "bg-blue-500 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+                disabled={isLoading}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          
           {errors?.status && (
             <span className="text-red-500 text-xs">
               {errors.status.message as string}
@@ -495,11 +557,6 @@ const OrderForm = ({
               />
             </div>
           </div>
-          {errors?.quantity && (
-            <span className="text-red-500 text-xs">
-              {errors.quantity.message as string}
-            </span>
-          )}
         </div>
       </div>
 
@@ -529,12 +586,6 @@ const OrderForm = ({
             : "Save Changes"}
         </button>
       </div>
-      
-      {type === "update" && (
-        <div className="text-xs text-gray-500 text-right mt-2">
-          Last updated: {currentDate} by {currentUser}
-        </div>
-      )}
     </form>
   );
 };

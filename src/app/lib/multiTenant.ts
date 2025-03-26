@@ -1,15 +1,12 @@
-// [2025-03-14 14:22:06] @sebastianascimento - Correção para suportar plural e singular
 import { prisma } from "./prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { cache } from "react";
 
-// Definir os modelos válidos, agora suportando singular e plural
 type ValidModelsSingular = "product" | "customer" | "order" | "category" | "brand" | "supplier";
 type ValidModelsPlural = "products" | "customers" | "orders" | "categories" | "brands" | "suppliers";
 type ValidModels = ValidModelsSingular | ValidModelsPlural;
 
-// Mapeamento de plural para singular
 const pluralToSingular: Record<string, string> = {
   "products": "product",
   "customers": "customer",
@@ -19,12 +16,10 @@ const pluralToSingular: Record<string, string> = {
   "suppliers": "supplier"
 };
 
-// Normalizar nome do modelo (converter plural para singular)
 function normalizeModelName(model: ValidModels): ValidModelsSingular {
   return (pluralToSingular[model] || model) as ValidModelsSingular;
 }
 
-// Função otimizada para obter companyId com cache
 export const getCurrentCompanyId = cache(async () => {
   const session = await getServerSession(authOptions);
   
@@ -43,11 +38,9 @@ export const getCurrentCompanyId = cache(async () => {
     throw new Error("Usuário sem empresa associada");
   }
   
-  console.log(`[2025-03-14 14:22:06] @sebastianascimento - Obtendo companyId: ${companyId}`);
   return companyId;
 });
 
-// Cliente Prisma isolado por tenant
 export async function getTenantPrisma() {
   try {
     const companyId = await getCurrentCompanyId();
@@ -150,15 +143,12 @@ export async function getTenantPrisma() {
       }
     };
   } catch (error) {
-    console.error(`[2025-03-14 14:22:06] @sebastianascimento - Erro ao obter tenant prisma:`, error);
     throw new Error("Falha no acesso seguro aos dados");
   }
 }
 
-// Função segura para listar por modelo (agora com suporte a plural)
 export async function listAllByCompany(model: ValidModels, options: any = {}) {
   const tenantPrisma = await getTenantPrisma();
-  // IMPORTANTE: Normalizar nome do modelo para singular 
   const normalizedModel = normalizeModelName(model);
   
   switch (normalizedModel) {
@@ -179,10 +169,8 @@ export async function listAllByCompany(model: ValidModels, options: any = {}) {
   }
 }
 
-// Função para contar registros por modelo (agora com suporte a plural)
 export async function countByCompany(model: ValidModels): Promise<number> {
   const tenantPrisma = await getTenantPrisma();
-  // IMPORTANTE: Normalizar nome do modelo para singular
   const normalizedModel = normalizeModelName(model);
   
   switch (normalizedModel) {

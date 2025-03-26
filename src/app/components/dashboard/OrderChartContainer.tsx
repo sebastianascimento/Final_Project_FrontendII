@@ -139,8 +139,8 @@ const OrderChartContainer = () => {
     : data;
 
   return (
-    <div className="bg-white rounded-lg p-3 sm:p-4 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-2 sm:mb-4">
+    <div className="bg-white rounded-lg p-3 sm:p-5 md:p-6 h-full flex flex-col">
+      <div className="flex justify-between items-center mb-6 sm:mb-4">
         <h1 className="text-base sm:text-lg font-semibold flex items-center">
           Orders of the week
           {companyName && (
@@ -158,10 +158,12 @@ const OrderChartContainer = () => {
         />
       </div>
       
-      <div className="flex-grow">
+      <div className="pt-12 sm:pt-0 mt-4 sm:mt-0 flex-grow w-full h-full min-h-[200px] md:min-h-[300px] lg:min-h-[350px]">
         {data.length > 0 ? (
-          <div className="h-full w-full">
-            <OrderChart data={processedData} />
+          <div className="h-full w-full flex items-center justify-center">
+            <div className="w-full h-full md:w-[95%] md:h-[85%] lg:w-[90%] lg:h-[80%]">
+              <OrderChart data={processedData} />
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-xs sm:text-sm md:text-base text-gray-500">

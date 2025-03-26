@@ -172,38 +172,82 @@ const LogisticsPage = async ({
         />
         
         <div className="h-screen flex">
-          <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+          {/* Sidebar - hidden on mobile */}
+          <div className="hidden lg:block w-[16%] xl:w-[14%] p-4">
             <Link
               href="/"
-              className="flex items-center justify-center lg:justify-start gap-2"
+              className="flex items-center justify-start gap-2"
               aria-label="Ir para página inicial"
             >
-              <span className="hidden lg:block font-bold">BizControl</span>
+              <span className="font-bold">BizControl</span>
             </Link>
             <Menu />
-          </nav>
+          </div>
 
-          <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-8">
+          {/* Mobile menu container */}
+          <div className="lg:hidden">
+            <Menu />
+          </div>
+
+          {/* Main content area - full width on mobile */}
+          <main className="w-full lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
             <header>
               <Navbar />
             </header>
             
             <div className="h-6" aria-hidden="true"></div>
 
-            <section className="bg-white p-4 rounded-md flex-1 m-4 mt-12">
-              <div className="flex items-center justify-between">
-                <h1 className="hidden md:block text-lg font-semibold">
+            <section className="bg-white p-3 sm:p-4 rounded-md flex-1 mx-auto w-full max-w-screen-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h1 className="text-lg font-semibold text-center sm:text-left">
                   Shipping Management
                 </h1>
-                <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
                   <TableSearch initialValue={searchTerm} />
-                  <div className="flex items-center gap-4 self-end">
+                  <div className="flex items-center gap-3 sm:gap-4 self-center sm:self-end">
                     <FormModal table="shipping" type="create" />
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 overflow-x-auto">
+              {/* Mobile view for shipping items */}
+              <div className="mt-4 block sm:hidden">
+                {data.length === 0 ? (
+                  <div className="text-center p-4 bg-gray-50 rounded-md">
+                    <p className="text-gray-500">Nenhum envio encontrado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {data.map((item) => (
+                      <div key={item.id} className="bg-gray-50 p-3 rounded-md">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="font-semibold">{item.stock.product.name}</div>
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full 
+                            ${item.status === 'DELIVERED' ? 'bg-green-100 text-green-800' : 
+                            item.status === 'SHIPPED' ? 'bg-blue-100 text-blue-800' :
+                            item.status === 'PROCESSING' ? 'bg-purple-100 text-purple-800' :
+                            item.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-gray-500">Carrier:</span> {item.carrier}</p>
+                          <p><span className="text-gray-500">Est. Delivery:</span> {new Date(item.estimatedDelivery).toLocaleDateString()}</p>
+                          <p><span className="text-gray-500">Stock Level:</span> {item.stock.stockLevel}</p>
+                        </div>
+                        <div className="flex justify-end gap-2 mt-3">
+                          <FormModal table="shipping" type="update" data={item} id={item.id} />
+                          <FormModal table="shipping" type="delete" id={item.id} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop view for shipping items */}
+              <div className="mt-6 overflow-x-auto hidden sm:block">
                 <table className="min-w-full divide-y divide-gray-200" aria-label="Lista de Envios e Logística">
                   <thead className="bg-gray-50">
                     <tr>
@@ -213,7 +257,7 @@ const LogisticsPage = async ({
                       <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Carrier
                       </th>
                       <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -253,7 +297,7 @@ const LogisticsPage = async ({
                               {item.status}
                             </span>
                           </td>
-                          <td className="p-4 hidden md:table-cell">{item.carrier}</td>
+                          <td className="p-4">{item.carrier}</td>
                           <td className="p-4">
                             {new Date(item.estimatedDelivery).toLocaleDateString()}
                           </td>
@@ -287,6 +331,7 @@ const LogisticsPage = async ({
       </>
     );
   } catch (error) {
+    console.error(`[${new Date().toISOString()}] @sebastianascimento - Error loading logistics data:`, error);
     return (
       <div className="h-screen flex flex-col items-center justify-center p-4 bg-gray-50" role="alert" aria-live="assertive">
         <div className="bg-white p-6 rounded-lg shadow-md max-w-lg w-full">

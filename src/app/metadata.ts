@@ -23,7 +23,6 @@ export const metadata: Metadata = {
       },
     ],
   },
-  // Configurações para o Twitter
   twitter: {
     card: 'summary_large_image',
     title: 'BizControl - Sistema de Gestão Multiempresa',

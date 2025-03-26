@@ -2,13 +2,19 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { shippingSchema } from "@/app/lib/formValidationSchemas";
 import { z } from "zod";
 import { createShipping, updateShipping } from "@/app/lib/actions";
 
 type ShippingInputs = z.infer<typeof shippingSchema>;
+type ShippingStatus = "PENDING" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+
+interface StatusOption {
+  value: ShippingStatus;
+  label: string;
+}
 
 interface Product {
   id: number;
@@ -34,8 +40,6 @@ interface ShippingFormProps {
 const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
   const { data: session } = useSession();
   const companyId = session?.user?.companyId;
-  const currentDateTime = "2025-03-24 14:03:19";
-  const currentUser = "sebastianascimento";
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState({
@@ -48,10 +52,25 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [filteredStocks, setFilteredStocks] = useState<Stock[]>([]);
   
+  // Product selection state with editing tracking
+  const [productInput, setProductInput] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+  const prevProductInputRef = useRef<string>("");
+  
   // Custom dropdown states
   const [selectedStockId, setSelectedStockId] = useState<number | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Status options
+  const statusOptions: StatusOption[] = [
+    { value: "PENDING", label: "Pending" },
+    { value: "PROCESSING", label: "Processing" },
+    { value: "SHIPPED", label: "Shipped" },
+    { value: "DELIVERED", label: "Delivered" },
+    { value: "CANCELLED", label: "Cancelled" }
+  ];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -67,29 +86,36 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
     };
   }, []);
 
+  // Memoize API URLs to prevent unnecessary re-fetches
+  const apiUrls = useMemo(() => {
+    if (!companyId) return null;
+    return {
+      products: `/api/products?companyId=${companyId}`,
+      stocks: `/api/stocks?companyId=${companyId}`
+    };
+  }, [companyId]);
+
+  // Fetch data only when necessary
   useEffect(() => {
     const fetchData = async () => {
-      if (!companyId) {
-        return;
-      }
+      if (!apiUrls) return;
       
       setIsLoading(true);
       try {
-        const productsRes = await fetch(`/api/products?companyId=${companyId}`);
+        const [productsRes, stocksRes] = await Promise.all([
+          fetch(apiUrls.products),
+          fetch(apiUrls.stocks)
+        ]);
         
         if (productsRes.ok) {
           const productsData = await productsRes.json();
-          
           const productsArray = Array.isArray(productsData) 
             ? productsData 
             : productsData?.data || productsData?.products || [];
           
           setProducts(productsArray);
-        } else {
-          setProducts([]);
         }
 
-        const stocksRes = await fetch(`/api/stocks?companyId=${companyId}`);
         if (stocksRes.ok) {
           const stocksData = await stocksRes.json();
           const stocksArray = Array.isArray(stocksData) 
@@ -97,19 +123,18 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
             : stocksData?.data || stocksData?.stocks || [];
             
           setStocks(stocksArray);
-        } else {
-          setStocks([]);
         }
       } catch (error) {
-        setProducts([]);
-        setStocks([]);
+        // Silent error handling - states already initialized with empty arrays
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, [companyId]);
+    if (apiUrls) {
+      fetchData();
+    }
+  }, [apiUrls]);
 
   const {
     register,
@@ -124,21 +149,89 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
       status: "PENDING",
       carrier: "",
       estimatedDelivery: new Date(new Date().setDate(new Date().getDate() + 7)),
+      productId: 0,
     },
   });
 
   const selectedProductId = watch("productId");
+  const statusValue = watch("status") || "PENDING";
 
+  // Handle status change
+  const handleStatusChange = (status: ShippingStatus) => {
+    setValue("status", status, { shouldDirty: true });
+  };
+  
+  // Improved product input change handler with exact matching improvements
+  const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    setProductInput(input);
+    
+    if (!input) {
+      setSelectedProduct(null);
+      setValue("productId", 0);
+      prevProductInputRef.current = "";
+      return;
+    }
+    
+    // Always check for exact match regardless of deletion or typing
+    const normalizedInput = input.toLowerCase().trim();
+    const exactMatch = products.find(
+      p => p.name.toLowerCase().trim() === normalizedInput
+    );
+    
+    // Always check if we no longer match the currently selected product
+    if (selectedProduct && selectedProduct.name.toLowerCase().trim() !== normalizedInput) {
+      // If we don't have an exact match with the new input
+      if (!exactMatch) {
+        // Clear selection if user is actively editing or if no partial matches
+        if (isEditingProduct || !products.some(p => p.name.toLowerCase().includes(normalizedInput))) {
+          setSelectedProduct(null);
+          setValue("productId", 0);
+        }
+      }
+    }
+    
+    // Check if user is deleting characters
+    const isDeletion = input.length < prevProductInputRef.current.length;
+    prevProductInputRef.current = input;
+    
+    // If we have an exact match, always set it
+    if (exactMatch) {
+      setSelectedProduct(exactMatch);
+      setValue("productId", exactMatch.id);
+      return;
+    }
+
+    // For partial matches, only autocomplete when adding characters (not deleting)
+    if (!isDeletion && !isEditingProduct) {
+      const partialMatch = products.find(
+        p => p.name.toLowerCase().trim().includes(normalizedInput)
+      );
+      
+      if (partialMatch) {
+        setSelectedProduct(partialMatch);
+        setValue("productId", partialMatch.id);
+        
+        // Autocomplete the input field
+        setProductInput(partialMatch.name);
+        prevProductInputRef.current = partialMatch.name;
+      } else {
+        setSelectedProduct(null);
+        setValue("productId", 0);
+      }
+    }
+  };
+
+  // Filter stocks based on selected product
   useEffect(() => {
     if (selectedProductId) {
       const filtered = stocks.filter(
         (stock) => stock.productId === Number(selectedProductId)
       );
       setFilteredStocks(filtered);
-      setSelectedStockId(null); // Reset selection
+      setSelectedStockId(null);
 
       if (filtered.length === 1) {
-        // Auto-select if only one stock exists
         setSelectedStockId(filtered[0].id);
       }
     } else {
@@ -147,8 +240,9 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
     }
   }, [selectedProductId, stocks]);
 
+  // Initialize form for updates
   useEffect(() => {
-    if (type === "update" && data) {
+    if (type === "update" && data && !isLoading && products.length > 0) {
       const estimatedDate = data.estimatedDelivery
         ? new Date(data.estimatedDelivery)
         : new Date(new Date().setDate(new Date().getDate() + 7));
@@ -158,15 +252,23 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
         status: data.status || "PENDING",
         carrier: data.carrier || "",
         estimatedDelivery: estimatedDate,
-        productId: data.productId || "",  // Changed from 0 to empty string
+        productId: data.productId ? Number(data.productId) : 0,
       });
       
-      // Set our custom state for the selected stock
+      if (data.productId) {
+        const product = products.find(p => p.id === data.productId);
+        if (product) {
+          setProductInput(product.name);
+          setSelectedProduct(product);
+          prevProductInputRef.current = product.name;
+        }
+      }
+      
       if (data.stockId) {
         setSelectedStockId(data.stockId);
       }
     }
-  }, [data, reset, type]);
+  }, [data, reset, type, products, isLoading]);
 
   const onSubmit = handleSubmit(async (formData) => {
     if (!companyId) {
@@ -178,7 +280,6 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
       return;
     }
     
-    // Use selectedStockId from our custom state
     const stockIdValue = selectedStockId || 0;
     
     setIsSubmitting(true);
@@ -188,7 +289,7 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
       const submissionData = {
         ...formData,
         stockId: stockIdValue,
-        productId: Number(formData.productId), // Ensure productId is a number
+        productId: Number(formData.productId),
         companyId,
       };
       
@@ -219,6 +320,7 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
     }
   });
 
+  // Render login prompt if no company ID
   if (!companyId) {
     return (
       <div className="p-4 text-center">
@@ -235,6 +337,7 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
     );
   }
 
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -255,17 +358,14 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
 
   // Get the text for the stock dropdown
   const getStockDropdownText = () => {
-    // If no product is selected, prompt to select a product first
     if (!selectedProductId) {
       return "Select a product first";
     }
     
-    // If no stocks available for the selected product
     if (filteredStocks.length === 0) {
       return "No stocks available";
     }
     
-    // If a specific stock is selected, show its details
     if (selectedStockId) {
       const stock = filteredStocks.find(s => s.id === selectedStockId);
       if (stock) {
@@ -273,7 +373,6 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
       }
     }
     
-    // Default state - prompt to select a stock
     return "Select a stock";
   };
 
@@ -292,23 +391,49 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
       )}
 
       {type === "update" && <input type="hidden" {...register("id")} />}
+      <input type="hidden" {...register("productId")} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1">
-          <label htmlFor="status" className="text-gray-700 text-sm font-medium">
+          <label className="text-gray-700 text-sm font-medium">
             Status
           </label>
-          <select
-            id="status"
-            className="border border-gray-300 p-2 rounded-md"
-            {...register("status")}
-          >
-            <option value="PENDING">Pending</option>
-            <option value="PROCESSING">Processing</option>
-            <option value="SHIPPED">Shipped</option>
-            <option value="DELIVERED">Delivered</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+          
+          <input type="hidden" {...register("status")} />
+          
+          <div className="grid grid-cols-2 gap-2">
+            {statusOptions.slice(0, 4).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleStatusChange(option.value)}
+                className={`px-2 py-1.5 text-xs sm:text-sm rounded-md border transition-colors ${
+                  statusValue === option.value
+                    ? "bg-blue-500 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+                disabled={isLoading}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => handleStatusChange("CANCELLED")}
+              className={`px-2 py-1.5 text-xs sm:text-sm rounded-md border transition-colors ${
+                statusValue === "CANCELLED"
+                  ? "bg-red-500 text-white border-red-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+              disabled={isLoading}
+            >
+              Cancelled
+            </button>
+          </div>
+          
           {errors?.status && (
             <span className="text-red-500 text-sm">{errors.status.message}</span>
           )}
@@ -360,37 +485,64 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
 
         <div className="flex flex-col gap-1">
           <label
-            htmlFor="productId"
+            htmlFor="product-input"
             className="text-gray-700 text-sm font-medium"
           >
             Product
           </label>
-          <select
-            id="productId"
-            {...register("productId")}
-            className={`w-full border ${
-              errors.productId ? "border-red-500" : "border-gray-300"
-            } p-2 rounded-md`}
-            disabled={isLoading}
-          >
-            <option value="">Select a product</option>
-            {Array.isArray(products) && products.length > 0 ? (
-              products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name} {product.price ? `($${product.price})` : ""}
-                </option>
-              ))
-            ) : (
-              <option value="" disabled>
-                {isLoading ? "Loading products..." : "No products available"}
-              </option>
-            )}
-          </select>
+          <div className="relative">
+            <input
+              id="product-input"
+              type="text"
+              value={productInput}
+              onChange={handleProductInputChange}
+              onFocus={() => setIsEditingProduct(true)}
+              onBlur={() => {
+                setIsEditingProduct(false);
+                // Validate exact match on blur
+                const exactMatch = products.find(
+                  p => p.name.toLowerCase().trim() === productInput.toLowerCase().trim()
+                );
+                if (!exactMatch) {
+                  setSelectedProduct(null);
+                  setValue("productId", 0);
+                }
+              }}
+              className={`w-full border ${
+                errors.productId ? "border-red-500" : selectedProduct ? "border-green-500" : "border-gray-300"
+              } p-2 rounded-md`}
+              placeholder="Enter or select a product"
+              list="product-options"
+              disabled={isLoading}
+            />
+            <datalist id="product-options">
+              {Array.isArray(products) && products.length > 0 ? (
+                products.map((product) => (
+                  <option key={product.id} value={product.name} />
+                ))
+              ) : null}
+            </datalist>
+          </div>
+          
           {errors?.productId && (
             <span className="text-red-500 text-sm">
               {errors.productId.message}
             </span>
           )}
+          
+          {productInput && !selectedProduct && !isLoading && (
+            <span className="text-yellow-500 text-xs">
+              Product not found. Check the name or add a new product.
+            </span>
+          )}
+          
+          {selectedProduct && (
+            <span className="text-green-600 text-xs">
+              Product found: {selectedProduct.name} 
+              {selectedProduct.price ? ` ($${selectedProduct.price})` : ''}
+            </span>
+          )}
+          
           {Array.isArray(products) && products.length === 0 && !isLoading && (
             <div className="text-yellow-500 text-xs mt-1">
               No products found for your company. Create products first.
@@ -403,7 +555,6 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
             Stock
           </label>
           
-          {/* Completely custom dropdown instead of select */}
           <div className="relative" ref={dropdownRef}>
             <div 
               id="custom-stock-dropdown"
@@ -426,7 +577,6 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
               )}
             </div>
             
-            {/* Custom dropdown options */}
             {isDropdownOpen && filteredStocks.length > 0 && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 shadow-lg rounded-md max-h-56 overflow-auto">
                 <ul>
@@ -467,10 +617,9 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
         </div>
       </div>
 
-      {/* Add timestamp for update forms */}
-      {type === "update" && (
+      {type === "update" && data?.updatedAt && (
         <div className="text-xs text-gray-500 text-right mt-2">
-          Last updated: {currentDateTime} by {currentUser}
+          Last updated: {new Date(data.updatedAt).toLocaleString()}
         </div>
       )}
 
@@ -496,5 +645,5 @@ const ShippingForm = ({ type, data, setOpen }: ShippingFormProps) => {
     </form>
   );
 };
-
+ 
 export default ShippingForm;

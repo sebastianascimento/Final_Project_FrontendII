@@ -67,7 +67,7 @@ interface StatisticsData {
 }
 
 const StatisticsPage = async () => {
-  const currentDate = "2025-03-24 11:34:14";
+  const currentDate = "2025-03-25 19:36:28";
   const currentUser = "sebastianascimento";
 
   const session = await getServerSession(authOptions);
@@ -82,17 +82,22 @@ const StatisticsPage = async () => {
   if (!companyId) {
     return (
       <div className="h-screen flex">
-        <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
-          <Link href="/" className="flex items-center justify-center lg:justify-start gap-2">
-            <span className="hidden lg:block font-bold">BizControl</span>
+        <div className="hidden lg:block w-[16%] xl:w-[14%] p-4">
+          <Link href="/" className="flex items-center justify-start gap-2">
+            <span className="font-bold">BizControl</span>
           </Link>
           <Menu />
-        </nav>
-        <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4">
+        </div>
+
+        <div className="lg:hidden">
+          <Menu />
+        </div>
+
+        <main className="w-full lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
           <header>
             <Navbar />
           </header>
-          <section className="bg-white p-8 rounded-md flex-1 m-4 mt-0">
+          <section className="bg-white p-5 sm:p-8 rounded-md flex-1 m-2 sm:m-4 mt-8">
             <div className="max-w-md mx-auto text-center">
               <div className="flex justify-center mb-6">
                 <div className="p-4 bg-yellow-100 rounded-full">
@@ -217,7 +222,7 @@ const StatisticsPage = async () => {
     topProducts = topProducts.filter(product => product.id !== 0);
     
   } catch (error) {
-    console.error("Error fetching top products:", error);
+    console.error(`[${currentDate}] @${currentUser} - Error fetching top products:`, error);
   }
 
   let topCustomers: TopCustomer[] = [];
@@ -292,7 +297,7 @@ const StatisticsPage = async () => {
     topCustomers = topCustomers.filter(customer => customer.id !== 0);
     
   } catch (error) {
-    console.error("Error fetching top customers:", error);
+    console.error(`[${currentDate}] @${currentUser} - Error fetching top customers:`, error);
   }
 
   return (
@@ -303,38 +308,69 @@ const StatisticsPage = async () => {
       />
       
       <div className="h-screen flex">
-        <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+        <div className="hidden lg:block w-[16%] xl:w-[14%] p-4">
           <Link
             href="/"
-            className="flex items-center justify-center lg:justify-start gap-2"
+            className="flex items-center justify-start gap-2"
             aria-label="Ir para página inicial"
           >
-            <span className="hidden lg:block font-bold">BizControl</span>
+            <span className="font-bold">BizControl</span>
           </Link>
           <Menu />
-        </nav>
+        </div>
 
-        <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-6">
+        <div className="lg:hidden">
+          <Menu />
+        </div>
+
+        <main className="w-full lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
           <header>
             <Navbar />
             <h1 className="sr-only">Dashboard de Estatísticas e Análises de Negócio</h1>
           </header>
 
-          <div className="h-8" aria-hidden="true"></div>
+          <div className="h-4 sm:h-6" aria-hidden="true"></div>
 
-          <section className="bg-white p-4 rounded-md flex-1 m-4 mt-8">
-            <header className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold">
+          <section className="bg-white p-2 sm:p-4 rounded-md flex-1 mx-auto w-full max-w-screen-xl">
+            <header className="flex items-center justify-between mb-3 sm:mb-6">
+              <h2 className="text-lg sm:text-xl font-bold text-center sm:text-left w-full">
                 Statistics Dashboard
               </h2>
             </header>
             
-            <section className="mb-6 bg-white rounded-md p-4 shadow-sm" aria-labelledby="best-products-heading">
-              <h3 id="best-products-heading" className="text-lg font-semibold mb-4">
+            <section className="mb-4 sm:mb-6 bg-white rounded-md p-2 sm:p-4 shadow-sm" aria-labelledby="best-products-heading">
+              <h3 id="best-products-heading" className="text-base sm:text-lg font-semibold mb-2 sm:mb-4">
                 Best-selling products
               </h3>
 
-              <div className="overflow-x-auto">
+              <div className="block sm:hidden">
+                {topProducts.length > 0 ? (
+                  <div className="space-y-3">
+                    {topProducts.map((product) => (
+                      <div key={product.id} className="bg-gray-50 p-3 rounded-md">
+                        <div className="font-medium text-gray-900 mb-1">{product.name}</div>
+                        <div className="text-sm space-y-1">
+                          <p>
+                            <span className="text-gray-500">Total Sold:</span> {product.total_sold}
+                          </p>
+                          <p>
+                            <span className="text-gray-500">Revenue:</span> ${product.totalRevenue.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-4 bg-gray-50 rounded-md">
+                    <p className="text-gray-500">Nenhum dado de venda encontrado para sua empresa</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200" aria-describedby="products-table-desc">
                   <caption id="products-table-desc" className="sr-only">
                     Lista dos produtos mais vendidos com quantidade e receita
@@ -394,10 +430,37 @@ const StatisticsPage = async () => {
               </div>
             </section>
 
-            <section className="mb-6 bg-white rounded-md p-4 shadow-sm" aria-labelledby="best-customers-heading">
-              <h3 id="best-customers-heading" className="text-lg font-semibold mb-4">Best customers</h3>
+            <section className="mb-3 sm:mb-6 bg-white rounded-md p-2 sm:p-4 shadow-sm" aria-labelledby="best-customers-heading">
+              <h3 id="best-customers-heading" className="text-base sm:text-lg font-semibold mb-2 sm:mb-4">Best customers</h3>
 
-              <div className="overflow-x-auto">
+              <div className="block sm:hidden">
+                {topCustomers.length > 0 ? (
+                  <div className="space-y-3">
+                    {topCustomers.map((customer) => (
+                      <div key={customer.id} className="bg-gray-50 p-3 rounded-md">
+                        <div className="font-medium text-gray-900 mb-1">{customer.name}</div>
+                        <div className="text-sm space-y-1">
+                          <p>
+                            <span className="text-gray-500">Orders:</span> {customer.totalOrders}
+                          </p>
+                          <p>
+                            <span className="text-gray-500">Total Spent:</span> ${customer.totalSpent.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center p-4 bg-gray-50 rounded-md">
+                    <p className="text-gray-500">Nenhum cliente encontrado para sua empresa</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200" aria-describedby="customers-table-desc">
                   <caption id="customers-table-desc" className="sr-only">
                     Lista dos melhores clientes com quantidade de pedidos e valor gasto
@@ -467,9 +530,9 @@ const StatisticsPage = async () => {
               </div>
             </section>
 
-            <section className="mb-6 bg-white rounded-md p-4 shadow-sm" aria-labelledby="monthly-chart-heading">
-              <h3 id="monthly-chart-heading" className="text-lg font-semibold mb-4 sr-only">Monthly Order Trends</h3>
-              <div className="h-[350px]">
+            <section className="mb-4 sm:mb-6 bg-white rounded-md shadow-sm px-4 py-6 sm:p-6" aria-labelledby="monthly-chart-heading">
+              <h3 id="monthly-chart-heading" className="hidden sm:block text-base sm:text-lg font-semibold mb-4 sm:mb-6">Monthly Order Trends</h3>
+              <div className="h-[300px] sm:h-[400px] w-full">
                 <MonthlyOrderChartContainer/>
               </div>
             </section>

@@ -231,57 +231,104 @@ const OrdersPage = async ({
         />
       
         <div className="h-screen flex">
-          <nav className="w-[14%] md:w-[8%] lg:w-[16%] xl:w-[14%] p-4" aria-label="Menu Principal">
+          {/* Sidebar - hidden on mobile */}
+          <div className="hidden lg:block w-[16%] xl:w-[14%] p-4">
             <Link
               href="/"
-              className="flex items-center justify-center lg:justify-start gap-2"
+              className="flex items-center justify-start gap-2"
               aria-label="Ir para página inicial"
             >
-              <span className="hidden lg:block font-bold">BizControl</span>
+              <span className="font-bold">BizControl</span>
             </Link>
             <Menu />
-          </nav>
+          </div>
 
-          <main className="w-[86%] md:w-[92%] lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-scroll flex flex-col p-4 pt-8">
+          {/* Mobile menu container */}
+          <div className="lg:hidden">
+            <Menu />
+          </div>
+
+          {/* Main content area - full width on mobile */}
+          <main className="w-full lg:w-[84%] xl:w-[86%] bg-[#F7F8FA] overflow-auto flex flex-col p-3 sm:p-4 pt-12 sm:pt-8">
             <header>
               <Navbar />
             </header>
             
             <div className="h-6" aria-hidden="true"></div>
 
-            <section className="bg-white p-4 rounded-md flex-1 m-4 mt-12">
-              <div className="flex items-center justify-between">
-                <h1 className="hidden md:block text-lg font-semibold">
+            <section className="bg-white p-3 sm:p-4 rounded-md flex-1 mx-auto w-full max-w-screen-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <h1 className="text-lg font-semibold text-center sm:text-left">
                   All Orders
                 </h1>
-                <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
                   <TableSearch initialValue={searchTerm} />
-                  <div className="flex items-center gap-4 self-end">
+                  <div className="flex items-center gap-3 sm:gap-4 self-center sm:self-end">
                     <FormModal table="order" type="create" />
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 overflow-x-auto">
+              {/* Mobile view for orders */}
+              <div className="mt-4 block sm:hidden">
+                {data.length === 0 ? (
+                  <div className="text-center p-4 bg-gray-50 rounded-md">
+                    <p className="text-gray-500">Nenhum pedido encontrado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {data.map((order) => {
+                      const totalAmount = ((order.product?.price || 0) * order.quantity).toFixed(2);
+                      return (
+                        <div key={order.id} className="bg-gray-50 p-3 rounded-md">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="font-semibold">Order #{order.id}</div>
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full 
+                              ${order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' : 
+                              order.status === 'SHIPPED' ? 'bg-blue-100 text-blue-800' :
+                              order.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'}`}>
+                              {order.status}
+                            </span>
+                          </div>
+                          <div className="text-sm space-y-1">
+                            <p><span className="text-gray-500">Customer:</span> {order.customer?.name || "N/A"}</p>
+                            <p><span className="text-gray-500">Product:</span> {order.product?.name || "N/A"}</p>
+                            <p><span className="text-gray-500">Quantity:</span> {order.quantity}</p>
+                            <p><span className="text-gray-500">Amount:</span> ${totalAmount}</p>
+                          </div>
+                          <div className="flex justify-end gap-2 mt-3">
+                            <FormModal table="order" type="update" data={order} id={order.id} />
+                            <FormModal table="order" type="delete" id={order.id} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop view for orders */}
+              <div className="mt-6 overflow-x-auto hidden sm:block">
                 <table className="min-w-full divide-y divide-gray-200" aria-label="Lista de Pedidos">
                   <thead className="bg-gray-50">
                     <tr>
                       <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Order Number
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Customer Name
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Product
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Quantity
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Total Amount
                       </th>
-                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th scope="col" className="p-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
                       <th scope="col" className="p-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -314,19 +361,19 @@ const OrdersPage = async ({
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4">
                               {order.customer?.name || "N/A"}
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4">
                               {order.product?.name || "N/A"}
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4">
                               {order.quantity}
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4">
                               ${totalAmount}
                             </td>
-                            <td className="p-4 hidden md:table-cell">
+                            <td className="p-4">
                               <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
                                 ${order.status === 'DELIVERED' ? 'bg-green-100 text-green-800' : 
                                 order.status === 'SHIPPED' ? 'bg-blue-100 text-blue-800' :
