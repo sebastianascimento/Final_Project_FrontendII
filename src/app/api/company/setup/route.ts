@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function POST(request: NextRequest) {
-  try {
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.email) {
@@ -53,11 +52,4 @@ export async function POST(request: NextRequest) {
       companyId: company.id,
       companyName: company.name
     });
-  } catch (error) {
-    
-    return NextResponse.json(
-      { message: "Erro ao configurar empresa" },
-      { status: 500 }
-    );
-  }
 }

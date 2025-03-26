@@ -16,7 +16,6 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
-        try {
           const user = await prisma.user.findUnique({
             where: { email: token.email as string },
             include: { company: true }
@@ -33,9 +32,6 @@ export const authOptions: NextAuthOptions = {
           } else {
             token.hasCompany = false;
           }
-        } catch (error) {
-          token.hasCompany = false;
-        }
       }
       return token;
     },
@@ -64,7 +60,6 @@ export const authOptions: NextAuthOptions = {
   events: {
     async signIn({ user }) {
       if (user.email) {
-        try {
           const existingUser = await prisma.user.findUnique({
             where: { email: user.email }
           });
@@ -78,8 +73,6 @@ export const authOptions: NextAuthOptions = {
               }
             });
           }
-        } catch (error) {
-        }
       }
     }
   },

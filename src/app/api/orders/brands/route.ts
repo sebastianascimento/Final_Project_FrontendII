@@ -1,4 +1,3 @@
-// [2025-03-15 09:51:16] @sebastianascimento - API de vendas por marca com suporte multi-tenant
 import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
