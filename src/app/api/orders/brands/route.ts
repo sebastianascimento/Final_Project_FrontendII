@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
     
 
-    let brandNames: Record<number, string> = {};
+    const brandNames: Record<number, string> = {};
     try {
       const brands = await prisma.brand.findMany({
         select: {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         brandNames[brand.id] = brand.name;
       });
       
-    } catch (e) {
+    } catch (error) {
    }
     
     const products = await prisma.product.findMany({
