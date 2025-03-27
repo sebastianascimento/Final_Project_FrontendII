@@ -76,14 +76,14 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-export default async function ClientsPage({
-  searchParams
-}: {
+// ⚠️ IMPORTANT: Don't use any PageProps type - define the params directly!
+export default async function Page(props: {
   searchParams: { 
     page?: string;
     search?: string;
   }
 }) {
+  const { searchParams } = props;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
