@@ -76,14 +76,9 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-// ⚠️ IMPORTANT: Don't use any PageProps type - define the params directly!
-export default async function Page(props: {
-  searchParams: { 
-    page?: string;
-    search?: string;
-  }
-}) {
-  const { searchParams } = props;
+// Use generic props type to avoid conflicts with any existing PageProps interface
+export default async function Page(props: any) {
+  const { searchParams = {} } = props;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
