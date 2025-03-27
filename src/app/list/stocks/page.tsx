@@ -68,14 +68,8 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-const StocksPage = async ({
-  searchParams
-}: {
-  searchParams: { 
-    page?: string;
-    search?: string;
-  }
-}) => {
+export default async function Page(props: any) {
+  const { searchParams = {} } = props;
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
@@ -340,7 +334,7 @@ const StocksPage = async ({
       </>
     );
   } catch (error) {
-    console.error(`[2025-03-24 16:56:48] @sebastianascimento - Error loading stocks:`, error);
+    console.error(`Error loading stocks:`, error);
     return (
       <div className="h-screen flex flex-col items-center justify-center p-4 bg-gray-50" role="alert" aria-live="assertive">
         <div className="bg-white p-6 rounded-lg shadow-md max-w-lg w-full">
@@ -353,6 +347,4 @@ const StocksPage = async ({
       </div>
     );
   }
-};
-
-export default StocksPage;
+}
