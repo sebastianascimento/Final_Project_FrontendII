@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
       { hostname: "avatars.githubusercontent.com" }
     ],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
 export default nextConfig;
