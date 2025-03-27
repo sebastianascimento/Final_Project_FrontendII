@@ -113,14 +113,8 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-const OrdersPage = async ({
-  searchParams
-}: {
-  searchParams: { 
-    page?: string;
-    search?: string;
-  }
-}) => {
+export default async function Page(props: any) {
+  const { searchParams = {} } = props;
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -425,6 +419,4 @@ const OrdersPage = async ({
       </div>
     );
   }
-};
-
-export default OrdersPage;
+}
