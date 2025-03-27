@@ -76,7 +76,7 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-export default async function CustomersPage({
+export default async function ClientsPage({
   searchParams
 }: {
   searchParams: { 
@@ -334,5 +334,5 @@ export default async function CustomersPage({
         </div>
       </div>
     );
-  }
-};
+  } 
+}
