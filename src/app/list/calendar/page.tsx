@@ -3,8 +3,8 @@ import BigCalendar from "../../components/calendar/BigCalendar";
 import Menu from "../../components/dashboard/Menu";
 import Navbar from "../../components/dashboard/Navbar";
 import Link from 'next/link';
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { Metadata } from "next";
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth'
 
 export const metadata: Metadata = {
   title: 'Calendário | BizControl - Sistema de Gestão de Produtos',

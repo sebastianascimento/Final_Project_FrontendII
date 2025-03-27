@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { cache } from "react";
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth'
 
 type ValidModelsSingular = "product" | "customer" | "order" | "category" | "brand" | "supplier";
 type ValidModelsPlural = "products" | "customers" | "orders" | "categories" | "brands" | "suppliers";

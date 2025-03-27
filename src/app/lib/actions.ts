@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { revalidatePath } from "next/cache";
 import { CustomerSchema, OrderSchema, ProductSchema, ShippingSchema, StockSchema } from "./formValidationSchemas";
 import { getServerSession } from "next-auth"; 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "../api/auth/[...nextauth]/auth";
 
 type CurrentState = { success: boolean; error: boolean; message?: string; };
 type ActionResult = { success: boolean; error: boolean; message?: string; };
