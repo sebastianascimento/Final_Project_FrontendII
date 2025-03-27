@@ -1,8 +1,7 @@
-// [2025-03-15 10:14:29] @sebastianascimento - API de dados financeiros com suporte multi-tenant
 import { prisma } from "@/app/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth'
 
 interface OrderWithProduct {
   id: number;
