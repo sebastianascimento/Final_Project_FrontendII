@@ -3,8 +3,8 @@
 
 import { prisma } from "@/app/lib/prisma";
 import { getServerSession } from "next-auth"; 
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { revalidatePath } from "next/cache";
+import { authOptions } from "../api/auth/[...nextauth]/auth";
 
 export async function setupCompanyAction(companyName: string) {
   try {
