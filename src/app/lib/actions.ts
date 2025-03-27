@@ -1025,9 +1025,6 @@ export async function createShipping(
   }
 }
 
-/**
- * Atualiza um registro de envio existente com verificação multi-tenant
- */
 export async function updateShipping(
   currentState: { success: boolean; error: boolean },
   data: ShippingSchema
