@@ -38,11 +38,10 @@ export const metadata: Metadata = {
   },
 };
 
-interface PageProps {
-  searchParams: {
-    page?: string;
-    search?: string;
-  };
+// Rename interface to avoid conflict with Next.js's PageProps
+interface ProductPageParams {
+  page?: string;
+  search?: string;
 }
 
 interface ProductOffer {
@@ -138,7 +137,9 @@ async function getProductsData(
   };
 }
 
-export default async function ProductsPage({ searchParams }: PageProps) {
+// Change to use any props type to avoid the conflict
+export default async function Page(props: any) {
+  const searchParams = props.searchParams || {};
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
