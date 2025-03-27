@@ -76,14 +76,14 @@ async function getSearchParams(params: any) {
   return params;
 }
 
-const CustomersPage = async ({
+export default async function CustomersPage({
   searchParams
 }: {
   searchParams: { 
     page?: string;
     search?: string;
   }
-}) => {
+}) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
@@ -322,7 +322,7 @@ const CustomersPage = async ({
       </>
     );
   } catch (error) {
-    console.error(`[2025-03-24 16:31:04] @sebastianascimento - Error loading customers:`, error);
+    console.error(`Error loading customers:`, error);
     return (
       <div className="h-screen flex flex-col items-center justify-center p-4 bg-gray-50" role="alert" aria-live="assertive">
         <div className="bg-white p-6 rounded-lg shadow-md max-w-lg w-full">
@@ -336,5 +336,3 @@ const CustomersPage = async ({
     );
   }
 };
-
-export default CustomersPage;
