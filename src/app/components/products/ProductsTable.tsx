@@ -1,6 +1,6 @@
 // Componente sem "use client" - este é um Server Component
 import Image from "next/image";
-import ProductActions from "./ProdctsActions";
+import ProductActions from "./ProductsActions";
 
 // Defina a interface para o produto
 interface Product {
