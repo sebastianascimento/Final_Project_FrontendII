@@ -1,8 +1,7 @@
-// [2025-03-14 16:42:50] @sebastianascimento - Tabela de produtos mais vendidos com suporte multi-tenant
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/app/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 async function getTopSellingProducts(companyId: string | null, limit = 10) {
   if (!companyId) {
