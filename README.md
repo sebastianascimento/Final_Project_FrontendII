@@ -1,39 +1,63 @@
+# BizControl - Sistema de Gestão Empresarial
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<p align="center">
+  <img src="/public/icons/bizcontrol.png" alt="BizControl Logo" height="200"/>
+</p>
 
-## Getting Started
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-13+-black" alt="Next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5.0+-blue" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Prisma-4.0+-2D3748" alt="Prisma" />
+  <img src="https://img.shields.io/badge/Tailwind-3.0+-38B2AC" alt="Tailwind" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" />
+</p>
 
-First, run the development server:
+Sistema completo de gestão empresarial. Gerencie pedidos, produtos e clientes em um único lugar com uma interface moderna e intuitiva.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 📋 Índice
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- [Visão Geral](#-visão-geral)
+- [Funcionalidades](#-funcionalidades)
+- [Tecnologias](#-tecnologias)
+- [Começando](#-começando)
+- [Estrutura do Projeto](#-estrutura-do-projeto)
+- [Autenticação](#-autenticação)
+- [Multi-Tenant](#-multi-tenant)
+- [API](#-api)
+- [Deployment](#-deployment)
+- [Licença](#-licença)
+- [Contato](#-contato)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🌟 Visão Geral
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+BizControl é uma aplicação web moderna para gestão empresarial, desenvolvida para pequenas e médias empresas que desejam otimizar seus processos de negócio. O sistema permite gerenciar produtos, pedidos e clientes, oferecendo uma visão clara do seu negócio.
 
-## Learn More
+A aplicação foi construída utilizando as mais recentes tecnologias web, com foco em performance, usabilidade e segurança.
 
-To learn more about Next.js, take a look at the following resources:
+## ✨ Funcionalidades
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Dashboard Intuitivo**: Visualize métricas chave do seu negócio em tempo real
+- **Gerenciamento de Produtos**: Cadastre, edite e gerencie seu catálogo de produtos
+- **Controle de Pedidos**: Acompanhe todo o fluxo de pedidos, do início à entrega
+- **Cadastro de Clientes**: Mantenha uma base de dados atualizada dos seus clientes
+- **Relatórios**: Gere relatórios personalizados para análise de desempenho
+- **Multi-Tenant**: Suporte para várias empresas na mesma plataforma
+- **Autenticação Segura**: Login com e-mail/senha ou integração com Google
+- **Responsivo**: Interface adaptável para desktop e dispositivos móveis
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛠 Tecnologias
 
-## Deploy on Vercel
+- **Frontend**:
+  - [Next.js](https://nextjs.org/) - Framework React com SSR e App Router
+  - [TypeScript](https://www.typescriptlang.org/) - Tipagem estática
+  - [Tailwind CSS](https://tailwindcss.com/) - Framework CSS utilitário
+  - [Next-Auth](https://next-auth.js.org/) - Autenticação para Next.js
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Backend**:
+  - [Next.js API Routes](https://nextjs.org/docs/api-routes/introduction) - API serverless
+  - [Prisma](https://www.prisma.io/) - ORM para Node.js e TypeScript
+  - [PostgreSQL](https://www.postgresql.org/) - Banco de dados relacional
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-
+- **Infraestrutura**:
+  - [Vercel](https://vercel.com/) - Plataforma de hospedagem
+  - [GitHub Actions](https://github.com/features/actions) - CI/CD
