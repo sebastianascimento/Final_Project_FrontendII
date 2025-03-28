@@ -60,4 +60,3 @@ A aplicação foi construída utilizando as mais recentes tecnologias web, com f
 
 - **Infraestrutura**:
   - [Vercel](https://vercel.com/) - Plataforma de hospedagem
-  - [GitHub Actions](https://github.com/features/actions) - CI/CD
