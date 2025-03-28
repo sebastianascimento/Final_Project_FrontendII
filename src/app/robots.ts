@@ -13,6 +13,6 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: 'https://seudominio.com/sitemap.xml',
+    sitemap: 'https://bizcontrol-kappa.vercel.app/sitemap.xml',
   };
 }

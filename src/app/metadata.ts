@@ -10,13 +10,13 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'BizControl - Sistema de Gestão Multiempresa',
     description: 'Gerencie sua empresa com facilidade usando nosso sistema de gestão de produtos',
-    url: 'https://bizcontrol.com',
+    url: 'https://bizcontrol-kappa.vercel.app',
     siteName: 'BizControl',
     locale: 'en_US',
     type: 'website',
     images: [
       {
-        url: 'https://bizcontrol .com/og-image.jpg', 
+        url: 'https://bizcontrol-kappa.vercel.app/ /icons/bizcontrol.png', 
         width: 1200,
         height: 630,
         alt: 'BizControl- Sistema de Gestão',

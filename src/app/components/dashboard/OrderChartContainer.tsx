@@ -149,13 +149,6 @@ const OrderChartContainer = () => {
             </span>
           )}
         </h1>
-        <Image 
-          src="/moreDark.png" 
-          alt="More options" 
-          width={20} 
-          height={20}
-          className="cursor-pointer w-4 h-4 sm:w-5 sm:h-5"
-        />
       </div>
       
       <div className="pt-12 sm:pt-0 mt-4 sm:mt-0 flex-grow w-full h-full min-h-[200px] md:min-h-[300px] lg:min-h-[350px]">

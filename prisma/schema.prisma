@@ -1,4 +1,3 @@
-// [2025-03-14 10:40:18] @sebastianascimento - Schema com ajustes para isolamento multi-tenant
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +9,6 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-// Company - OK, já bem estruturado
 model Company {
   id        String   @id @default(uuid())
   name      String

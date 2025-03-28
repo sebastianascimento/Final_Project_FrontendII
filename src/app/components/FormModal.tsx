@@ -199,7 +199,7 @@ const FormModal = ({
   const renderButtonContent = () => {
     if (type === "create") {
       return (
-        <Image src="/icons/add.png" alt="Add New" width={14} height={14} />
+        <Image src="/icons/create.png" alt="Add New" width={14} height={14} />
       );
     } else if (type === "update") {
       return <Image src="/icons/edit.png" alt="Edit" width={14} height={14} />;
