@@ -14,7 +14,8 @@ export const authOptions: NextAuthOptions = {
     signIn: "/signin",
   },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account, trigger, session }) {
+      // Durante o login inicial (account presente)
       if (account) {
           const user = await prisma.user.findUnique({
             where: { email: token.email as string },
@@ -33,6 +34,31 @@ export const authOptions: NextAuthOptions = {
             token.hasCompany = false;
           }
       }
+      
+      // Quando a sessão é explicitamente atualizada via update()
+      if (trigger === "update" && session?.user) {
+        console.log("Update trigger received:", session);
+        
+        // Atualiza o token com os dados da sessão
+        if (session.user.companyId) {
+          token.companyId = session.user.companyId;
+          token.companyName = session.user.companyName;
+          token.hasCompany = true;
+        }
+        
+        // Também verifica no banco de dados para garantir dados atualizados
+        const freshUser = await prisma.user.findUnique({
+          where: { email: token.email as string },
+          include: { company: true }
+        });
+        
+        if (freshUser?.companyId) {
+          token.companyId = freshUser.companyId;
+          token.companyName = freshUser.company?.name;
+          token.hasCompany = true;
+        }
+      }
+      
       return token;
     },
     

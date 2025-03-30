@@ -11,6 +11,13 @@ export default function SetupCompanyPage() {
   const router = useRouter();
   const { data: session, update, status } = useSession();
   
+  // Verificar se já tem uma empresa configurada
+  useEffect(() => {
+    if (session?.user?.companyId) {
+      router.push("/dashboard");
+    }
+  }, [session, router]);
+  
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
@@ -35,7 +42,7 @@ export default function SetupCompanyPage() {
         throw new Error(data.message || "Erro ao configurar empresa");
       }
       
-      
+      // Atualiza a sessão e espera ela ser atualizada
       await update({
         ...session,
         user: {
@@ -46,7 +53,14 @@ export default function SetupCompanyPage() {
         }
       });
       
-      router.push("/dashboard");
+      // Importante: Adicionar um pequeno atraso para permitir que a sessão seja atualizada
+      setTimeout(() => {
+        // Use o router.replace para substituir o histórico em vez de adicionar
+        router.replace("/dashboard");
+        // Force a página a recarregar para garantir que os dados da sessão estejam atualizados em toda parte
+        router.refresh();
+      }, 300);
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
       setLoading(false);

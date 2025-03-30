@@ -1,4 +1,3 @@
-// [2025-03-14 10:27:13] @sebastianascimento - Componente para mostrar empresa atual
 "use client";
 
 import { useSession } from "next-auth/react";

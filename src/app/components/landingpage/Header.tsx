@@ -40,29 +40,28 @@ const Header = () => {
           />
         </div>
 
-        <nav className="hidden md:flex items-center space-x-4">
-          <Link
-            href="/"
-            className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
-          >
-            Home
-          </Link>
-          {session && (
-            <Link
-              href="/dashboard"
-              className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
-            >
-              Dashboard
-            </Link>
-          )}
+        {/* Sign In centralizado */}
+        <div className="flex-1 flex justify-center">
           {!session ? (
             <Link
               href="/signin"
-              className="px-4 py-2 rounded-full text-white hover:bg-blue-600"
+              className="px-8 py-2 rounded-full text-white hover:bg-blue-600 text-center"
             >
               Sign in
             </Link>
           ) : (
+            <Link
+              href="/dashboard"
+              className="px-8 py-2 rounded-full text-white hover:bg-blue-600 text-center"
+            >
+              Dashboard
+            </Link>
+          )}
+        </div>
+
+        {/* Área para botão de Sign Out quando logado (desktop) */}
+        <div className="hidden md:block">
+          {session && (
             <button
               onClick={handleSignOut}
               className="px-4 py-2 rounded-full text-white hover:bg-red-500"
@@ -70,8 +69,9 @@ const Header = () => {
               Sign out
             </button>
           )}
-          {/* Botão Contact removido daqui */}
-        </nav>
+          {/* Espaço vazio quando não logado para manter o layout balanceado */}
+          {!session && <div className="w-[88px]"></div>}
+        </div>
 
         {/* Botão de Hamburger para Mobile */}
         <button 
@@ -90,7 +90,7 @@ const Header = () => {
         </button>
       </div>
 
-      {/* Menu Mobile - Slide down quando aberto */}
+      {/* Menu Mobile - Simplificado */}
       {isMenuOpen && (
         <div className="absolute top-[72px] left-0 right-0 bg-blue-500 shadow-lg rounded-b-lg z-50 px-4 py-2 flex flex-col md:hidden transition-all duration-300 ease-in-out">
           <Link
@@ -101,34 +101,34 @@ const Header = () => {
             Home
           </Link>
           {session && (
-            <Link
-              href="/dashboard"
-              className="py-3 text-white border-b border-blue-400 hover:bg-blue-600 px-4"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Dashboard
-            </Link>
+            <>
+              <Link
+                href="/dashboard"
+                className="py-3 text-white border-b border-blue-400 hover:bg-blue-600 px-4"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={() => {
+                  handleSignOut();
+                  setIsMenuOpen(false);
+                }}
+                className="py-3 text-white hover:bg-red-500 text-left px-4"
+              >
+                Sign out
+              </button>
+            </>
           )}
-          {!session ? (
+          {!session && (
             <Link
               href="/signin"
-              className="py-3 text-white border-b border-blue-400 hover:bg-blue-600 px-4"
+              className="py-3 text-white hover:bg-blue-600 px-4"
               onClick={() => setIsMenuOpen(false)}
             >
               Sign in
             </Link>
-          ) : (
-            <button
-              onClick={() => {
-                handleSignOut();
-                setIsMenuOpen(false);
-              }}
-              className="py-3 text-white hover:bg-red-500 text-left px-4"
-            >
-              Sign out
-            </button>
           )}
-          {/* Link Contact removido daqui */}
         </div>
       )}
     </header>
