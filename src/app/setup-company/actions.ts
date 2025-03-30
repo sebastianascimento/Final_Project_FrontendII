@@ -4,7 +4,6 @@ import { prisma } from "@/app/lib/prisma";
 import { getServerSession } from "next-auth"; 
 import { revalidatePath } from "next/cache";
 import { authOptions } from "../api/auth/[...nextauth]/auth";
-// Import necessário para manipulação da sessão
 import { cookies } from 'next/headers';
 
 export async function setupCompanyAction(companyName: string) {
@@ -53,10 +52,9 @@ export async function setupCompanyAction(companyName: string) {
         }
       });
     }
-    
-    // Força expiração do token JWT para forçar atualização da sessão
-    // Isso fará com que o NextAuth regenere o token com dados atualizados
-    const cookieStore = cookies();
+
+    // Add 'await' here to fix the type error
+    const cookieStore = await cookies();
     cookieStore.set('next-auth.session-token', '', { expires: new Date(0) });
     
     revalidatePath("/dashboard");
